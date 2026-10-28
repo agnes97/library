@@ -151,10 +151,17 @@
     };
   }
 
-  type Field = 'title' | 'author' | 'description';
+  /** e.g. "Harry Potter · Book 3" */
+  const seriesLabel = $derived(
+    book.seriesNumber === undefined ? book.series : `${book.series} · Book ${book.seriesNumber}`
+  );
+
+  type Field = 'title' | 'author' | 'description' | 'series';
   /** the detail being corrected in place, and what it reads while being typed */
   let editing = $state<Field | null>(null);
   let draft = $state('');
+  /** the volume's number in the series, typed beside its name */
+  let draftNumber = $state('');
   let saving = $state(false);
   let editError = $state<string | null>(null);
 
@@ -162,6 +169,7 @@
     if (closing || saving) return;
     editError = null;
     draft = (field === 'description' ? book.description : book[field]) ?? '';
+    draftNumber = book.seriesNumber?.toString() ?? '';
     editing = field;
   }
 
@@ -250,6 +258,7 @@
   /** Saves the correction for every shelf the book sits on; an empty title is dropped. */
   async function save() {
     if (!editing || saving) return;
+    if (editing === 'series') return saveSeries();
     const value = draft.trim();
     const current = (editing === 'description' ? book.description : book[editing]) ?? '';
     if (value === current || (editing === 'title' && !value)) {
@@ -266,7 +275,26 @@
               .filter(Boolean),
           }
         : { [editing]: value };
+    await commit(edit);
+  }
 
+  /** Saves the series and the volume's number in it; an empty name takes the book out of it. */
+  async function saveSeries() {
+    const series = draft.trim();
+    const number = draftNumber.trim().replace(',', '.');
+    const seriesNumber = series && number ? Number(number) : null;
+    if (seriesNumber !== null && !(seriesNumber > 0)) {
+      editError = 'The number in the series must be above zero';
+      return;
+    }
+    if (series === (book.series ?? '') && seriesNumber === (book.seriesNumber ?? null)) {
+      editing = null;
+      return;
+    }
+    await commit({ series, seriesNumber });
+  }
+
+  async function commit(edit: BookEdit) {
     saving = true;
     try {
       await library.edit(book.id, edit);
@@ -346,6 +374,62 @@
             </svg>
           </button>
           <span class="ornament" aria-hidden="true">❦</span>
+          {#if editing === 'series'}
+            <!-- saved once the focus leaves both fields, not when it moves between them -->
+            <p
+              class="series series-edit"
+              onfocusout={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) save();
+              }}
+            >
+              <input
+                {@attach focusEnd}
+                class="edit"
+                aria-label="Series"
+                placeholder="Series, empty to leave it"
+                autocomplete="off"
+                disabled={saving}
+                bind:value={draft}
+                onkeydown={onEditKeydown}
+              />
+              <span aria-hidden="true">Book</span>
+              <input
+                class="edit number"
+                aria-label="Number in the series"
+                placeholder="№"
+                inputmode="decimal"
+                autocomplete="off"
+                disabled={saving}
+                bind:value={draftNumber}
+                onkeydown={onEditKeydown}
+              />
+            </p>
+          {:else if book.series}
+            <p class="series">
+              {#if canEdit}
+                <button
+                  type="button"
+                  class="editable"
+                  title="Click to correct the series"
+                  onclick={() => startEditing('series')}
+                >
+                  {seriesLabel}
+                </button>
+              {:else}
+                {seriesLabel}
+              {/if}
+            </p>
+          {:else if canEdit}
+            <p class="series">
+              <button
+                type="button"
+                class="editable missing"
+                onclick={() => startEditing('series')}
+              >
+                Add to a series
+              </button>
+            </p>
+          {/if}
           <h2 id={titleId}>
             {#if editing === 'title'}
               <input
@@ -1071,6 +1155,29 @@
 
   .portrait h2 {
     font-size: 30px;
+  }
+
+  /* the series reads over the title, closer to it than the ornament */
+  .series {
+    margin-bottom: -10px;
+    font-family: var(--caps);
+    font-weight: 600;
+    font-size: 12px;
+    font-variant-numeric: lining-nums;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--paper-accent);
+  }
+
+  .series-edit {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .series-edit .number {
+    flex: none;
+    width: 4em;
   }
 
   p {

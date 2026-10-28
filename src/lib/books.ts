@@ -112,8 +112,32 @@ function flatSeries(readings: ApiReading[]) {
 }
 
 /**
+ * A volume's number as its title gives it, e.g. "Vol. 3", "Book 2", "#5", "3. díl", or a number
+ * ending it, as in "Frieren 4"; only asked of books in a series.
+ */
+const VOLUME =
+  /\b(?:vol(?:ume)?|book|part|tome|band|no|díl|svazek|kniha)\.?\s*(\d+(?:\.\d+)?)|#\s*(\d+(?:\.\d+)?)|\b(\d+)\.\s*(?:díl|svazek|kniha)|\s(\d{1,2})$/i;
+
+function volumeFromTitle(title: string): number | undefined {
+  const match = VOLUME.exec(title.trim());
+  const number = match?.slice(1).find(Boolean);
+  return number ? Number(number) : undefined;
+}
+
+/**
+ * The volumes of a series read in the same year, highest number first as if read in order; one
+ * with no number keeps its place among them.
+ */
+function inSeriesOrder(run: ShelfBook[]): ShelfBook[] {
+  const numbered = run
+    .filter(({ book }) => book.seriesNumber !== undefined)
+    .toSorted((a, b) => (b.book.seriesNumber ?? 0) - (a.book.seriesNumber ?? 0));
+  return run.map((item) => (item.book.seriesNumber === undefined ? item : numbered.shift()!));
+}
+
+/**
  * Every reading as it sits on the shelves, in the same order, except that the volumes of a series
- * read in the same year sit together, where the newest of them would.
+ * read in the same year sit together, where the newest of them would, in the order of the series.
  */
 export function shelve(readings: ApiReading[]): ShelfBook[] {
   const flat = flatSeries(readings);
@@ -132,7 +156,7 @@ export function shelve(readings: ApiReading[]): ShelfBook[] {
     }
     run.push(item);
   }
-  return runs.flat();
+  return runs.flatMap(inSeriesOrder);
 }
 
 function toShelfBook({ id, read, book, readBy, addedBy }: ApiReading, lying: boolean): ShelfBook {
@@ -153,6 +177,7 @@ function toShelfBook({ id, read, book, readBy, addedBy }: ApiReading, lying: boo
       spineRatio: book.spineRatio ?? undefined,
       description: book.description ?? undefined,
       series: book.series ?? undefined,
+      seriesNumber: book.series ? (book.seriesNumber ?? volumeFromTitle(book.title)) : undefined,
       colors: dye ? paletteFrom(dye) : PALETTES[seed % PALETTES.length],
     },
     // the volumes of a series share their size, give or take their thickness
@@ -184,8 +209,12 @@ const SAMPLE_READER = { id: 'sample', name: 'A reader', avatar: null };
 function sample(
   id: string,
   read: string,
-  book: Omit<ApiBook, 'id' | 'isbn' | 'series' | 'spineUrl' | 'spineColor' | 'spineRatio'> & {
+  book: Omit<
+    ApiBook,
+    'id' | 'isbn' | 'series' | 'seriesNumber' | 'spineUrl' | 'spineColor' | 'spineRatio'
+  > & {
     series?: string;
+    seriesNumber?: number;
   }
 ): ApiReading {
   return {
@@ -196,6 +225,7 @@ function sample(
       id,
       isbn: null,
       series: null,
+      seriesNumber: null,
       spineUrl: null,
       spineColor: null,
       spineRatio: null,
@@ -258,6 +288,7 @@ export const sampleReadings: ShelfBook[] = shelve([
     description:
       'Dumbledore is gone, and Harry, Ron and Hermione leave Hogwarts behind to hunt down the Horcruxes that keep Voldemort alive.',
     series: 'Harry Potter',
+    seriesNumber: 7,
   }),
   sample('OL82565W', '2021-11-06', {
     title: 'Harry Potter and the Half-Blood Prince',
@@ -269,6 +300,7 @@ export const sampleReadings: ShelfBook[] = shelve([
     description:
       'Dumbledore shows Harry the memories of the boy Tom Riddle once was, while an old potions book signed by the Half-Blood Prince makes him the best in his class.',
     series: 'Harry Potter',
+    seriesNumber: 6,
   }),
   sample('OL82548W', '2021-09-19', {
     title: 'Harry Potter and the Order of the Phoenix',
@@ -280,6 +312,7 @@ export const sampleReadings: ShelfBook[] = shelve([
     description:
       'No one believes Voldemort is back, the Ministry sends Dolores Umbridge to Hogwarts, and Harry starts teaching his friends to defend themselves in secret.',
     series: 'Harry Potter',
+    seriesNumber: 5,
   }),
   sample('OL82560W', '2021-07-02', {
     title: 'Harry Potter and the Goblet of Fire',
@@ -291,6 +324,7 @@ export const sampleReadings: ShelfBook[] = shelve([
     description:
       'The Goblet of Fire names a fourth champion for the Triwizard Tournament, though Harry is too young to enter and never put his name in.',
     series: 'Harry Potter',
+    seriesNumber: 4,
   }),
   sample('OL82536W', '2021-05-15', {
     title: 'Harry Potter and the Prisoner of Azkaban',
@@ -301,6 +335,7 @@ export const sampleReadings: ShelfBook[] = shelve([
     coverColor: null,
     description: 'Sirius Black has escaped from Azkaban, and everyone says he is coming for Harry.',
     series: 'Harry Potter',
+    seriesNumber: 3,
   }),
   sample('OL82537W', '2021-03-08', {
     title: 'Harry Potter and the Chamber of Secrets',
@@ -312,6 +347,7 @@ export const sampleReadings: ShelfBook[] = shelve([
     description:
       'Students are being found turned to stone, and a voice in the walls only Harry can hear speaks of the Chamber of Secrets, opened once again.',
     series: 'Harry Potter',
+    seriesNumber: 2,
   }),
   sample('OL82563W', '2021-01-10', {
     title: 'Harry Potter and the Philosopher’s Stone',
@@ -323,5 +359,6 @@ export const sampleReadings: ShelfBook[] = shelve([
     description:
       'On his eleventh birthday, Harry Potter learns that he is a wizard, and leaves the cupboard under the stairs for Hogwarts School of Witchcraft and Wizardry.',
     series: 'Harry Potter',
+    seriesNumber: 1,
   }),
 ]);

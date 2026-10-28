@@ -38,6 +38,8 @@ export type Book = {
   spineRatio?: number;
   description?: string;
   series?: string;
+  /** its place in the series, as stored or else as its title gives it, e.g. "Vol. 3" */
+  seriesNumber?: number;
   colors: {
     c1: string;
     c2: string;
@@ -136,10 +138,18 @@ export type ApiBook = {
   isbn: string | null;
   description: string | null;
   series: string | null;
+  /** its place in the series, e.g. 3, or 1.5 for a novella between */
+  seriesNumber: number | null;
 };
 
-/** a correction to a book that came wrong from Open Library; an empty description clears it */
-export type BookEdit = Partial<Pick<ApiBook, 'title' | 'authors'>> & { description?: string };
+/**
+ * a correction to a book that came wrong from Open Library; an empty description clears it, and an
+ * empty series takes the book out of it along with its number
+ */
+export type BookEdit = Partial<Pick<ApiBook, 'title' | 'authors' | 'seriesNumber'>> & {
+  description?: string;
+  series?: string;
+};
 
 /** a reading as prismify's /library/readings returns it */
 export type ApiReading = {
