@@ -32,6 +32,10 @@ export type Book = {
   coverUrl?: string;
   /** the cover's dominant colour, e.g. #4a2a1c, which the cloth is dyed after */
   coverColor?: string;
+  /** a photo of the real spine, standing upright, drawn instead of the cloth */
+  spineUrl?: string;
+  /** that photo's width over its height */
+  spineRatio?: number;
   description?: string;
   series?: string;
   colors: {
@@ -39,6 +43,8 @@ export type Book = {
     c2: string;
     accent: string;
     ink: string;
+    /** the lettering's shadow, when it is not the dark one gilt needs */
+    shadow?: string;
   };
 };
 
@@ -123,6 +129,10 @@ export type ApiBook = {
   pages: number | null;
   coverUrl: string | null;
   coverColor: string | null;
+  spineUrl: string | null;
+  /** the spine photo's dominant colour, which dyes the cloth over the cover's */
+  spineColor: string | null;
+  spineRatio: number | null;
   isbn: string | null;
   description: string | null;
   series: string | null;

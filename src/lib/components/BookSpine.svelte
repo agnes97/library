@@ -14,11 +14,15 @@
   };
 
   let { book, width, height, lean, flat = false, onSelect }: Props = $props();
+
+  /** a spine photo that failed to load, so the cloth one shows instead */
+  let brokenPhoto = $state<string>();
+  const photo = $derived(book.spineUrl !== brokenPhoto ? book.spineUrl : undefined);
 </script>
 
 <button
   type="button"
-  class={['spine', { lean: lean !== undefined, flat }]}
+  class={['spine', { lean: lean !== undefined, flat, photo }]}
   aria-label="{book.title} by {book.author}"
   style:--w="{width}px"
   style:--h="{height}px"
@@ -27,11 +31,16 @@
   style:--c2={book.colors.c2}
   style:--book-accent={book.colors.accent}
   style:--ink={book.colors.ink}
+  style:--ink-shadow={book.colors.shadow}
   onclick={(event) => onSelect(event.currentTarget)}
 >
-  <span class="band"></span>
-  <span class="title">{book.title}</span>
-  <span class="pip"></span>
+  {#if photo}
+    <img src={photo} alt="" draggable="false" onerror={() => (brokenPhoto = photo)} />
+  {:else}
+    <span class="band"></span>
+    <span class="title">{book.title}</span>
+    <span class="pip"></span>
+  {/if}
 </button>
 
 <style>
@@ -142,7 +151,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     max-height: calc(var(--h) - 96px);
-    text-shadow: 0 1px 2px rgb(0 0 0 / 0.7);
+    text-shadow: 0 1px 2px var(--ink-shadow, rgb(0 0 0 / 0.7));
   }
 
   .pip {
@@ -152,6 +161,43 @@
     rotate: 45deg;
     border: 1px solid var(--book-accent);
     opacity: 0.8;
+  }
+
+  /* a photo of the real spine, rounded by the same light as the cloth */
+  .photo {
+    overflow: hidden;
+    background: var(--c2);
+  }
+
+  .photo img {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--w);
+    height: var(--h);
+    translate: -50% -50%;
+  }
+
+  /* lies with its top to the left, so the title reads along the pile */
+  .photo.flat img {
+    rotate: -90deg;
+  }
+
+  .photo::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      rgb(0 0 0 / 0.35),
+      rgb(255 255 255 / 0.06) 20%,
+      transparent 55%,
+      rgb(0 0 0 / 0.4)
+    );
+  }
+
+  .photo.flat::after {
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 45%, rgb(0 0 0 / 0.4));
   }
 
   @media (prefers-reduced-motion: reduce) {

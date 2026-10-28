@@ -7,6 +7,7 @@
   import { shrinkPhoto } from '../photo';
   import type { BookEdit, EditionCover, ShelfBook } from '../types';
   import BookCover3D from './BookCover3D.svelte';
+  import SpinePicker from './SpinePicker.svelte';
 
   type Props = {
     reading: ShelfBook;
@@ -203,6 +204,9 @@
     pickingCover = false;
   }
 
+  /** putting a photo of the real spine on the first page, in place of the 3D cover */
+  let pickingSpine = $state(false);
+
   async function saveCover(source: string | File) {
     if (savingCover) return;
     savingCover = true;
@@ -303,6 +307,7 @@
     // Escape while correcting a detail or asking to remove it only drops that
     if (editing) stopEditing();
     else if (pickingCover) closePicker();
+    else if (pickingSpine) pickingSpine = false;
     else if (confirmingRemove) confirmingRemove = false;
     else requestClose();
   }}
@@ -520,6 +525,9 @@
                 />
               </div>
             {/if}
+            {#if pickingSpine}
+              <SpinePicker {book} onClose={() => (pickingSpine = false)} />
+            {/if}
             <div class="actions">
               {#if removeError}
                 <p class="edit-error" role="alert">{removeError}</p>
@@ -549,6 +557,15 @@
                   {#if canEdit}
                     <button type="button" class="remove-button" onclick={openPicker}>
                       Change cover
+                    </button>
+                    <button
+                      type="button"
+                      class="remove-button"
+                      onclick={() => {
+                        if (!closing) pickingSpine = true;
+                      }}
+                    >
+                      Spine photo
                     </button>
                   {/if}
                   {#if canRemove}

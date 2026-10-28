@@ -18,7 +18,6 @@
     Math.max(min, Math.min(max, value));
 
   const width = $derived(Math.round(height * 0.68));
-  const depth = $derived(clamp(Math.round(height * 0.13), 14, 30));
   const fontSize = $derived(clamp(Math.round(height * 0.085), 10, 18));
 
   let rx = $state(REST_X);
@@ -28,6 +27,14 @@
   /** a cover that failed to load, so the cloth one shows instead */
   let brokenCover = $state<string>();
   const cover = $derived(book.coverUrl !== brokenCover ? book.coverUrl : undefined);
+  let brokenSpine = $state<string>();
+  const spinePhoto = $derived(book.spineUrl !== brokenSpine ? book.spineUrl : undefined);
+  /** a photographed spine keeps its shape, as far as the cover's own shape allows */
+  const depth = $derived(
+    book.spineRatio && spinePhoto
+      ? clamp(Math.round(height * book.spineRatio), 10, Math.round(height * 0.3))
+      : clamp(Math.round(height * 0.13), 14, 30)
+  );
 
   /** Turns the box by dragging; letting go away from it (or lifting a finger) sends it home. */
   function draggable(host: HTMLElement) {
@@ -165,7 +172,18 @@
       {/if}
     </div>
     <div class="face back"></div>
-    <div class="face spine"><span>{book.title}</span></div>
+    <div class="face spine">
+      {#if spinePhoto}
+        <img
+          src={spinePhoto}
+          alt=""
+          draggable="false"
+          onerror={() => (brokenSpine = spinePhoto)}
+        />
+      {:else}
+        <span>{book.title}</span>
+      {/if}
+    </div>
     <div class="face pages"></div>
     <div class="face top"></div>
     <div class="face bottom"></div>
@@ -295,6 +313,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .spine img {
+    width: 100%;
+    height: 100%;
   }
 
   .spine span {

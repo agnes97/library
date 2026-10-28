@@ -84,6 +84,24 @@ class Library {
     );
   }
 
+  /**
+   * Puts a photo of the book's real spine, cropped and standing upright, on every shelf it sits
+   * on, or takes it off for the cloth one when there is none.
+   */
+  async setSpine(id: string, spine: Blob | null) {
+    let init: RequestInit = { method: 'DELETE' };
+    if (spine) {
+      const body = new FormData();
+      body.append('image', spine, 'spine.jpg');
+      init = { method: 'PUT', body };
+    }
+
+    const book = await request<ApiBook>(`/library/books/${id}/spine`, init);
+    this.#readings = this.#readings.map((reading) =>
+      reading.book.id === id ? { ...reading, book } : reading
+    );
+  }
+
   /** Takes a reading off the shelves for good. */
   async remove(id: string) {
     await request(`/library/readings/${id}`, { method: 'DELETE' });

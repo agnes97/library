@@ -28,9 +28,12 @@ const SERIES_RANGE: [number, number] = [22, 40];
 /** A series longer than a trilogy lies flat only when every volume is slimmer than this. */
 const SLIM_PAGES = 300;
 
+/** Cloth lighter than this gets dark lettering instead of gilt. */
+const LIGHT_CLOTH = 0.55;
+
 /**
- * Cloth dyed after a cover's dominant colour: its hue, kept as dark as the hand-picked palettes
- * so the gilt lettering stays readable on any cover, even a white one.
+ * Cloth dyed after the spine photo's or the cover's dominant colour, as light or dark as it is, lettered in
+ * gilt when it is dark and in ink when it is light, so a white cover gets a white spine.
  */
 function paletteFrom(color: string): Book['colors'] {
   const [r, g, b] = [1, 3, 5].map((at) => parseInt(color.slice(at, at + 2), 16) / 255);
@@ -49,14 +52,18 @@ function paletteFrom(color: string): Book['colors'] {
           : (r - g) / chroma + 4;
 
   const h = Math.round(hue * 60);
-  const s = Math.round(Math.min(sat, 0.6) * 100);
-  const l = Math.round(Math.min(Math.max(light, 0.12), 0.26) * 100);
+  const s = Math.round(Math.min(sat, 0.8) * 100);
+  const l = Math.round(Math.min(Math.max(light, 0.1), 0.9) * 100);
+  const pale = light > LIGHT_CLOTH;
+  // a grey cover keeps a grey accent rather than the red of hue 0
+  const accentSat = s < 8 ? s : Math.max(s, 30);
   return {
     c1: `hsl(${h} ${s}% ${l}%)`,
-    c2: `hsl(${h} ${s}% ${Math.round(l / 2)}%)`,
-    // a grey cover keeps a grey accent rather than the red of hue 0
-    accent: `hsl(${h} ${s < 8 ? s : Math.max(s, 30)}% 74%)`,
-    ink: `hsl(${h} ${Math.round(s / 3)}% 91%)`,
+    // the shade at the foot of the spine, gentler on pale cloth
+    c2: `hsl(${h} ${s}% ${Math.max(l - 14, Math.round(l / 2))}%)`,
+    accent: `hsl(${h} ${accentSat}% ${pale ? 32 : 74}%)`,
+    ink: `hsl(${h} ${Math.round(s / 3)}% ${pale ? 14 : 91}%)`,
+    ...(pale && { shadow: `hsl(${h} ${s}% 97% / 0.5)` }),
   };
 }
 
@@ -66,6 +73,9 @@ function hash(text: string) {
   for (const char of text) h = Math.imul(h ^ char.charCodeAt(0), 16777619);
   return h >>> 0;
 }
+
+/** A photographed spine keeps its shape, within what the shelves can hold. */
+const PHOTO_WIDTHS: [number, number] = [16, 110];
 
 /** A spine as thick as the book is long; picked from `fallback` when its pages are unknown. */
 function thickness(pages: number | null, [thin, thick]: [number, number], fallback: number) {
@@ -127,6 +137,8 @@ export function shelve(readings: ApiReading[]): ShelfBook[] {
 
 function toShelfBook({ id, read, book, readBy, addedBy }: ApiReading, lying: boolean): ShelfBook {
   const seed = hash(book.id);
+  const height = HEIGHTS[(hash(book.series ?? book.id) >>> 12) % HEIGHTS.length];
+  const dye = book.spineColor ?? book.coverColor;
   return {
     key: id,
     book: {
@@ -137,15 +149,19 @@ function toShelfBook({ id, read, book, readBy, addedBy }: ApiReading, lying: boo
       pages: book.pages ?? undefined,
       coverUrl: book.coverUrl ?? undefined,
       coverColor: book.coverColor ?? undefined,
+      spineUrl: book.spineUrl ?? undefined,
+      spineRatio: book.spineRatio ?? undefined,
       description: book.description ?? undefined,
       series: book.series ?? undefined,
-      colors: book.coverColor ? paletteFrom(book.coverColor) : PALETTES[seed % PALETTES.length],
+      colors: dye ? paletteFrom(dye) : PALETTES[seed % PALETTES.length],
     },
     // the volumes of a series share their size, give or take their thickness
-    width: lying
-      ? thickness(book.pages, SERIES_RANGE, SERIES_WIDTHS[(seed >>> 4) % SERIES_WIDTHS.length])
-      : thickness(book.pages, SPINE_RANGE, WIDTHS[(seed >>> 4) % WIDTHS.length]),
-    height: HEIGHTS[(hash(book.series ?? book.id) >>> 12) % HEIGHTS.length],
+    width: book.spineRatio
+      ? Math.round(Math.min(Math.max(height * book.spineRatio, PHOTO_WIDTHS[0]), PHOTO_WIDTHS[1]))
+      : lying
+        ? thickness(book.pages, SERIES_RANGE, SERIES_WIDTHS[(seed >>> 4) % SERIES_WIDTHS.length])
+        : thickness(book.pages, SPINE_RANGE, WIDTHS[(seed >>> 4) % WIDTHS.length]),
+    height,
     lying,
     read,
     readBy,
@@ -168,13 +184,23 @@ const SAMPLE_READER = { id: 'sample', name: 'A reader', avatar: null };
 function sample(
   id: string,
   read: string,
-  book: Omit<ApiBook, 'id' | 'isbn' | 'series'> & { series?: string }
+  book: Omit<ApiBook, 'id' | 'isbn' | 'series' | 'spineUrl' | 'spineColor' | 'spineRatio'> & {
+    series?: string;
+  }
 ): ApiReading {
   return {
     id: `sample-${id}`,
     read,
     createdAt: read,
-    book: { id, isbn: null, series: null, ...book },
+    book: {
+      id,
+      isbn: null,
+      series: null,
+      spineUrl: null,
+      spineColor: null,
+      spineRatio: null,
+      ...book,
+    },
     readBy: SAMPLE_READER,
     addedBy: SAMPLE_READER,
   };
