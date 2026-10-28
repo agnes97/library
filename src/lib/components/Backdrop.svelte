@@ -133,7 +133,7 @@
 
   .haze {
     background:
-      radial-gradient(ellipse 70% 30% at 50% 0%, rgb(92 44 84 / 0.22), transparent 70%),
+      radial-gradient(ellipse 70% 30% at 50% 0%, color-mix(in srgb, var(--light-a-3) 22%, transparent), transparent 70%),
       linear-gradient(
         180deg,
         rgb(7 4 5 / 0.55) 0%,
@@ -149,7 +149,7 @@
     width: 3px;
     height: 3px;
     border-radius: 50%;
-    background: #f7c9e6;
+    background: var(--light-a-1);
     box-shadow: 0 0 8px var(--accent);
     opacity: 0;
     pointer-events: none;
@@ -164,8 +164,8 @@
     z-index: 4;
     pointer-events: none;
     background:
-      radial-gradient(ellipse 40% 50% at 25% 100%, rgb(150 90 160 / 0.16), transparent 70%),
-      radial-gradient(ellipse 45% 55% at 75% 100%, rgb(200 90 150 / 0.13), transparent 70%),
+      radial-gradient(ellipse 40% 50% at 25% 100%, color-mix(in srgb, var(--light-b-2) 16%, transparent), transparent 70%),
+      radial-gradient(ellipse 45% 55% at 75% 100%, color-mix(in srgb, var(--light-a-2) 13%, transparent), transparent 70%),
       linear-gradient(0deg, rgb(7 4 5 / 0.95), transparent 60%);
   }
 

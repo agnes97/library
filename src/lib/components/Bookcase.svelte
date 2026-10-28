@@ -36,6 +36,12 @@
   /** the width of a hanging year tag with four digits, chains included */
   const TAG_WIDTH = 164;
 
+  /** "The End", its letters lit alternately by the two lights, spaces skipped */
+  const endLetters = [...'The End'].map((char, i, all) => ({
+    char,
+    light: all.slice(0, i).filter((c) => c !== ' ').length % 2 ? 'b' : 'a',
+  }));
+
   const yearOf = (item: ShelfBook) => Number(item.read.slice(0, 4));
 
   /**
@@ -257,9 +263,12 @@
                 <div class="plank"></div>
               </div>
             {/each}
-            <div class="unit">
+            <div class="unit last">
               <div class="row end" bind:clientWidth={rowWidth}>
-                <p>The End</p>
+                <p>
+                  {#each endLetters as { char, light }, i (i)}<span class="light-{light}">{char}</span
+                    >{/each}
+                </p>
               </div>
               <div class="plank"></div>
             </div>
@@ -315,8 +324,8 @@
     mix-blend-mode: screen;
     opacity: 0.7;
     background:
-      radial-gradient(ellipse 200px 420px at 0 215px, var(--rose-glow), transparent),
-      radial-gradient(ellipse 200px 420px at 100% 215px, var(--violet-glow), transparent);
+      radial-gradient(ellipse 200px 420px at 0 215px, var(--light-a-glow), transparent),
+      radial-gradient(ellipse 200px 420px at 100% 215px, var(--light-b-glow), transparent);
     -webkit-mask: var(--silhouette);
     mask: var(--silhouette);
   }
@@ -463,7 +472,21 @@
     align-items: center;
   }
 
+  /*
+   * not isolated, so its words can rise above the case's shade; the back panel
+   * moves up to z-index 0 to stay in front of the case like the other shelves'
+   */
+  .last {
+    isolation: auto;
+  }
+
+  .last::before {
+    z-index: 0;
+  }
+
   .end p {
+    position: relative;
+    z-index: 6;
     margin: 0;
     font-family: var(--display);
     font-weight: 700;
@@ -472,10 +495,24 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     text-align: center;
-    color: #efe2ea;
+    white-space: pre;
+  }
+
+  .end span {
+    color: color-mix(in srgb, var(--l2) 70%, var(--l1));
     text-shadow:
-      0 0 28px rgb(232 111 181 / 0.28),
+      0 0 24px color-mix(in srgb, var(--l2) 45%, transparent),
       0 2px 0 #000;
+  }
+
+  .end .light-a {
+    --l1: var(--light-a-1);
+    --l2: var(--light-a-2);
+  }
+
+  .end .light-b {
+    --l1: var(--light-b-1);
+    --l2: var(--light-b-2);
   }
 
   .plank {
@@ -531,8 +568,8 @@
     pointer-events: none;
     mix-blend-mode: screen;
     background:
-      radial-gradient(ellipse 50% 42% at 0% 135px, var(--rose-glow), transparent 100%),
-      radial-gradient(ellipse 50% 42% at 100% 135px, var(--violet-glow), transparent 100%);
+      radial-gradient(ellipse 50% 42% at 0% 135px, var(--light-a-glow), transparent 100%),
+      radial-gradient(ellipse 50% 42% at 100% 135px, var(--light-b-glow), transparent 100%);
   }
 
   /* shelf props */
@@ -579,8 +616,8 @@
     border-radius: 50% 50% 22% 22% / 62% 62% 38% 38%;
     background: radial-gradient(
       ellipse 60% 70% at 50% 80%,
-      #fff0fa,
-      var(--rose-2) 60%,
+      var(--light-a-1),
+      var(--light-a-2) 60%,
       transparent 80%
     );
     filter: blur(0.6px);
@@ -594,7 +631,7 @@
     height: 240px;
     translate: -50% 50%;
     border-radius: 50%;
-    background: radial-gradient(circle, var(--rose-glow), transparent 65%);
+    background: radial-gradient(circle, var(--light-a-glow), transparent 65%);
     mix-blend-mode: screen;
     pointer-events: none;
   }

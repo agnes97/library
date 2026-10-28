@@ -319,7 +319,7 @@
       var(--c2);
     box-shadow:
       0 34px 70px rgb(0 0 0 / 0.75),
-      0 0 60px -18px rgb(232 111 181 / 0.35);
+      0 0 60px -18px color-mix(in srgb, var(--light-a-2) 35%, transparent);
   }
 
   .landscape .board,

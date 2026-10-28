@@ -49,7 +49,7 @@
 <style>
   dialog {
     padding: 0;
-    border: 1px solid rgb(240 166 212 / 0.25);
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
     border-radius: 4px;
     background: var(--surface-raised);
     color: var(--text);
@@ -57,7 +57,7 @@
     max-height: calc(100vh - 2rem);
     box-shadow:
       0 24px 60px rgb(0 0 0 / 0.7),
-      0 0 40px -12px rgb(232 111 181 / 0.35);
+      0 0 40px -12px color-mix(in srgb, var(--light-a-2) 35%, transparent);
   }
 
   dialog::backdrop {

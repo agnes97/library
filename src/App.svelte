@@ -34,15 +34,14 @@
       </div>
 
       <p class="hint">
-        Scroll the case to bring another shelf into the torchlight. Hover a spine to draw a volume
-        from it; click to open it.
+        Scroll, hover, click: let the pages flick.
       </p>
 
       <Bookcase {readings} {shelfDecor} onSelect={select} />
     </main>
-
-    <footer>© 2022 - {new Date().getFullYear()} Jana Mácová</footer>
   </div>
+
+  <footer>© <span class="years">2022 - {new Date().getFullYear()}</span> Jana Mácová</footer>
 </div>
 
 <Modal bind:open={isLoginOpen} title="Login">
@@ -71,7 +70,7 @@
     z-index: 2;
     max-width: 1060px;
     margin: 0 auto;
-    padding: 44px 24px 28px;
+    padding: 44px 24px 0;
   }
 
   .divider {
@@ -86,11 +85,11 @@
   .line {
     flex: 1;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgb(240 166 212 / 0.45));
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--light-a-2) 45%, transparent));
   }
 
   .line:last-child {
-    background: linear-gradient(90deg, rgb(180 107 255 / 0.45), transparent);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--light-b-2) 45%, transparent), transparent);
   }
 
   .hint {
@@ -102,15 +101,26 @@
     color: var(--text-muted);
   }
 
+  /* outside .outer so it sits above the backdrop's fog and vignette */
   footer {
-    margin-top: 56px;
+    --nudge: 2rem;
+    position: relative;
+    z-index: 6;
+    max-width: 1060px;
+    margin: 0 auto;
+    padding: 56px calc(24px + var(--nudge)) 28px 24px;
     text-align: right;
+    font-style: italic;
+    font-size: 19px;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+
+  /* IM Fell only has old-style figures */
+  .years {
     font-family: var(--serif);
     font-weight: 600;
-    font-size: 18px;
     font-variant-numeric: lining-nums;
-    letter-spacing: 0.04em;
-    color: var(--text-muted);
   }
 
   @media (max-width: 1340px) {
@@ -118,11 +128,20 @@
       padding-left: 110px;
       padding-right: 110px;
     }
+
+    footer {
+      padding-left: 110px;
+      padding-right: calc(110px + var(--nudge));
+    }
   }
 
   @media (max-width: 760px) {
     .outer {
       padding: 28px 16px 20px;
+    }
+
+    footer {
+      padding: 56px calc(16px + var(--nudge)) 20px 16px;
     }
   }
 </style>

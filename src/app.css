@@ -5,8 +5,6 @@
   --text: #e8ddd0;
   --text-muted: #c4b2bf;
   --border: #4a3442;
-  --accent: #f0a6d4;
-  --accent-hover: #ffd1ec;
   --on-accent: #1a0d14;
   --danger: #ff9a8a;
 
@@ -14,19 +12,156 @@
   --caps: Cinzel, Georgia, serif;
   --display: 'Cinzel Decorative', Georgia, serif;
 
-  /* torch flames: core, body, edge and the glow they throw */
-  --rose-1: #ffe6f4;
-  --rose-2: #ff5fb7;
-  --rose-3: #b2338a;
-  --rose-glow: rgb(255 95 183 / 0.3);
-  --violet-1: #f1e6ff;
-  --violet-2: #b06bff;
-  --violet-3: #5b2bb8;
-  --violet-glow: rgb(160 96 255 / 0.3);
+  /* glows thrown by each light, derived from its body colour */
+  --light-a-glow: color-mix(in srgb, var(--light-a-2) 30%, transparent);
+  --light-b-glow: color-mix(in srgb, var(--light-b-2) 30%, transparent);
 
   color-scheme: dark;
   font-family: 'IM Fell English', Georgia, serif;
   line-height: 1.5;
+}
+
+/*
+ * Colour themes. Each has two lights: a (left torch, candle, accents) and
+ * b (right torch). Each light has a core, body and edge colour. A theme
+ * defines its two palettes; data-swapped trades which light gets which.
+ */
+:root {
+  --light-a-1: var(--pal-a-1);
+  --light-a-2: var(--pal-a-2);
+  --light-a-3: var(--pal-a-3);
+  --light-b-1: var(--pal-b-1);
+  --light-b-2: var(--pal-b-2);
+  --light-b-3: var(--pal-b-3);
+}
+
+:root[data-swapped] {
+  --light-a-1: var(--pal-b-1);
+  --light-a-2: var(--pal-b-2);
+  --light-a-3: var(--pal-b-3);
+  --light-b-1: var(--pal-a-1);
+  --light-b-2: var(--pal-a-2);
+  --light-b-3: var(--pal-a-3);
+}
+
+:root,
+:root[data-theme='pink-purple'] {
+  --pal-a-1: #ffe6f4;
+  --pal-a-2: #ff5fb7;
+  --pal-a-3: #b2338a;
+  --pal-b-1: #f1e6ff;
+  --pal-b-2: #b06bff;
+  --pal-b-3: #5b2bb8;
+  --accent: #f0a6d4;
+  --accent-hover: #ffd1ec;
+  --text-accent: #f3c4e2;
+}
+
+:root[data-theme='blue'] {
+  --pal-a-1: #e6f4ff;
+  --pal-a-2: #6cc4ff;
+  --pal-a-3: #2f7fc4;
+  --pal-b-1: #e3e8ff;
+  --pal-b-2: #4a6bff;
+  --pal-b-3: #1f2f9e;
+  --accent: #a6d4f0;
+  --accent-hover: #d1ecff;
+  --text-accent: #c4e2f3;
+}
+
+:root[data-theme='green'] {
+  --pal-a-1: #f2fff5;
+  --pal-a-2: #a0ffb8;
+  --pal-a-3: #3fbf5e;
+  --pal-b-1: #cfe8d7;
+  --pal-b-2: #1a9550;
+  --pal-b-3: #0a3f21;
+  --accent: #a6f0b8;
+  --accent-hover: #d1ffdc;
+  --text-accent: #c4f3d0;
+}
+
+:root[data-theme='cyan-orange'] {
+  --pal-a-1: #e6fffd;
+  --pal-a-2: #3ff0e6;
+  --pal-a-3: #138f9c;
+  --pal-b-1: #fff1e0;
+  --pal-b-2: #ff9a3c;
+  --pal-b-3: #b4501a;
+  --accent: #9ef0ea;
+  --accent-hover: #d0fffa;
+  --text-accent: #c4f3f0;
+}
+
+:root[data-theme='white'] {
+  --pal-a-1: #ffffff;
+  --pal-a-2: #f4f2ff;
+  --pal-a-3: #9a96b0;
+  --pal-b-1: var(--pal-a-1);
+  --pal-b-2: var(--pal-a-2);
+  --pal-b-3: var(--pal-a-3);
+  --light-a-glow: color-mix(in srgb, var(--light-a-2) 25%, transparent);
+  --light-b-glow: var(--light-a-glow);
+  --accent: #e8e4f0;
+  --accent-hover: #ffffff;
+  --text-accent: #f0eef5;
+}
+
+/* registered so a theme change fades the lights instead of jumping */
+@property --light-a-1 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffe6f4;
+}
+@property --light-a-2 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ff5fb7;
+}
+@property --light-a-3 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #b2338a;
+}
+@property --light-b-1 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #f1e6ff;
+}
+@property --light-b-2 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #b06bff;
+}
+@property --light-b-3 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #5b2bb8;
+}
+@property --accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #f0a6d4;
+}
+@property --accent-hover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #ffd1ec;
+}
+@property --text-accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #f3c4e2;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root {
+    transition-property:
+      --light-a-1, --light-a-2, --light-a-3, --light-b-1, --light-b-2, --light-b-3, --accent,
+      --accent-hover, --text-accent;
+    transition-duration: 0.8s;
+    transition-timing-function: ease;
+  }
 }
 
 *,

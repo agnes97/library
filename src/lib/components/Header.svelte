@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { auth } from '../auth.svelte';
+  import AccountMenu from './AccountMenu.svelte';
 
   type Props = {
     onLoginClick: () => void;
@@ -30,21 +30,15 @@
         d="M53 21 C47 20 42 21 37 23 M53 28 C47 27 42 28 37 30 M53 35 C47 34 42 35 37 37 M53 42 C47 41 42 42 37 44"
       />
       <!-- the ribbon hangs out from under the right page's bottom edge -->
-      <path d="M44 47.8 V60 L46.5 57.5 L49 60 V47.3" />    </svg>
+      <path class="ribbon" d="M44 47.8 V60 L46.5 57.5 L49 60 V47.3" />
+    </svg>
     <div>
       <p class="eyebrow">Bibliotheca</p>
       <h1>Library</h1>
     </div>
   </div>
 
-  {#if auth.isAuthenticated && auth.user}
-    <div class="user">
-      <span>Logged in as <strong>{auth.user.name}</strong></span>
-      <button type="button" onclick={() => auth.logout()}>Logout</button>
-    </div>
-  {:else if auth.status === 'unauthenticated'}
-    <button type="button" onclick={onLoginClick}>Login</button>
-  {/if}
+  <AccountMenu {onLoginClick} />
 </header>
 
 <style>
@@ -65,8 +59,13 @@
 
   svg {
     flex: none;
-    color: var(--accent);
-    filter: drop-shadow(0 0 10px rgb(232 111 181 / 0.45));
+    /* from light a, so it trades places with the ribbon when the theme is swapped */
+    color: color-mix(in srgb, var(--light-a-2) 55%, var(--light-a-1));
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--light-a-2) 45%, transparent));
+  }
+
+  .ribbon {
+    stroke: var(--light-b-2);
   }
 
   .eyebrow {
@@ -76,7 +75,7 @@
     font-size: 12px;
     letter-spacing: 0.42em;
     text-transform: uppercase;
-    color: #b9a2c4;
+    color: color-mix(in srgb, var(--light-b-1) 35%, var(--text-muted));
   }
 
   h1 {
@@ -88,55 +87,7 @@
     letter-spacing: 0.02em;
     color: #efe2ea;
     text-shadow:
-      0 0 28px rgb(232 111 181 / 0.28),
+      0 0 28px color-mix(in srgb, var(--light-a-2) 28%, transparent),
       0 2px 0 #000;
-  }
-
-  .user {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    color: var(--text-muted);
-  }
-
-  strong {
-    color: var(--text);
-  }
-
-  button {
-    min-height: 44px;
-    padding: 0 26px;
-    border: 1px solid rgb(240 166 212 / 0.55);
-    background: rgb(20 10 16 / 0.6);
-    color: #f3c4e2;
-    font-family: var(--caps);
-    font-weight: 600;
-    font-size: 13px;
-    letter-spacing: 0.24em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition:
-      box-shadow 0.4s,
-      border-color 0.4s,
-      color 0.4s;
-  }
-
-  button:hover {
-    border-color: var(--accent);
-    color: #ffe4f4;
-    box-shadow:
-      0 0 24px -4px rgb(232 111 181 / 0.55),
-      inset 0 0 18px -8px rgb(232 111 181 / 0.6);
-  }
-
-  button:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 4px;
-  }
-
-  @media (max-width: 560px) {
-    .user span {
-      display: none;
-    }
   }
 </style>

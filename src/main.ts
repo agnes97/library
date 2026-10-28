@@ -2,7 +2,9 @@ import { mount } from 'svelte';
 import './app.css';
 import App from './App.svelte';
 import { auth } from './lib/auth.svelte';
+import { theme } from './lib/theme.svelte';
 
+theme.init();
 auth.init();
 
 const app = mount(App, {

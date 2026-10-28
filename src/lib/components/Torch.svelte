@@ -35,18 +35,18 @@
 
   .left {
     left: -120px;
-    --f1: var(--rose-1);
-    --f2: var(--rose-2);
-    --f3: var(--rose-3);
-    --fg: var(--rose-glow);
+    --f1: var(--light-a-1);
+    --f2: var(--light-a-2);
+    --f3: var(--light-a-3);
+    --fg: var(--light-a-glow);
   }
 
   .right {
     right: -120px;
-    --f1: var(--violet-1);
-    --f2: var(--violet-2);
-    --f3: var(--violet-3);
-    --fg: var(--violet-glow);
+    --f1: var(--light-b-1);
+    --f2: var(--light-b-2);
+    --f3: var(--light-b-3);
+    --fg: var(--light-b-glow);
   }
 
   .halo {
@@ -121,7 +121,7 @@
     translate: -50% 0;
     clip-path: polygon(0 0, 100% 0, 78% 100%, 22% 100%);
     background: linear-gradient(90deg, #120d0f, #3a2e33 40%, #1b1417 70%, #0b0809);
-    box-shadow: inset 0 3px 0 rgb(255 140 210 / 0.35);
+    box-shadow: inset 0 3px 0 color-mix(in srgb, var(--light-a-2) 35%, transparent);
   }
 
   .rim {
