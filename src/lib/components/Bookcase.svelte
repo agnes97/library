@@ -14,9 +14,11 @@
     onSelect: (reading: ShelfBook, spine: HTMLElement) => void;
     /** shows the add button on the top shelf; left out for visitors who can't add */
     onAdd?: () => void;
+    /** hang a year tag where each year's readings begin; off for the sample books */
+    tags?: boolean;
   };
 
-  let { readings, shelfDecor, onSelect, onAdd }: Props = $props();
+  let { readings, shelfDecor, onSelect, onAdd, tags = true }: Props = $props();
 
   const TORCHES_KEY = 'torches';
 
@@ -175,7 +177,8 @@
         const j = start + i;
         const leans = tipped !== undefined && j === end - 1;
         if (leans) offset += tipped;
-        const first = j === 0 || yearOf(firstOf(unit)) !== yearOf(firstOf(queue[j - 1]));
+        const first =
+          tags && (j === 0 || yearOf(firstOf(unit)) !== yearOf(firstOf(queue[j - 1])));
         // the tag hangs from the left of the button and book together
         const tagAt = offset;
         if (add && i === 0) offset += ADD_WIDTH;

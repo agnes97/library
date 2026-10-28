@@ -20,6 +20,8 @@
   const book = $derived(reading.book);
   /** only its reader can take a reading off the shelf */
   const canRemove = $derived(reading.readBy.id === auth.user?.id);
+  /** only those logged in can correct a book; the samples shown to visitors are read-only */
+  const canEdit = $derived(auth.isAuthenticated);
 
   const titleId = $props.id();
 
@@ -351,6 +353,8 @@
                 onkeydown={onEditKeydown}
                 onblur={save}
               />
+            {:else if !canEdit}
+              {book.title}
             {:else}
               <button
                 type="button"
@@ -375,6 +379,8 @@
                 onkeydown={onEditKeydown}
                 onblur={save}
               />
+            {:else if !canEdit}
+              {book.author}
             {:else}
               <button
                 type="button"
@@ -406,6 +412,10 @@
               onkeydown={onEditKeydown}
               onblur={save}
             ></textarea>
+          {:else if !canEdit}
+            {#if book.description}
+              <div class="description">{book.description}</div>
+            {/if}
           {:else if book.description}
             <!-- not a button, so the drop cap still takes the first letter -->
             <div
@@ -536,9 +546,11 @@
                 </span>
               {:else}
                 <span class="remove-choices">
-                  <button type="button" class="remove-button" onclick={openPicker}>
-                    Change cover
-                  </button>
+                  {#if canEdit}
+                    <button type="button" class="remove-button" onclick={openPicker}>
+                      Change cover
+                    </button>
+                  {/if}
                   {#if canRemove}
                     <button
                       type="button"

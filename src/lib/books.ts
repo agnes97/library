@@ -1,4 +1,4 @@
-import type { ApiReading, Book, ShelfBook, ShelfOptions } from './types';
+import type { ApiBook, ApiReading, Book, ShelfBook, ShelfOptions } from './types';
 
 /** Cloth colours for the spines, one picked per book. */
 const PALETTES: Book['colors'][] = [
@@ -162,3 +162,140 @@ export const shelfDecor: ShelfOptions[] = [
   { lean: true },
   {},
 ];
+
+const SAMPLE_READER = { id: 'sample', name: 'A reader', avatar: null };
+
+function sample(
+  id: string,
+  read: string,
+  book: Omit<ApiBook, 'id' | 'isbn' | 'series'> & { series?: string }
+): ApiReading {
+  return {
+    id: `sample-${id}`,
+    read,
+    createdAt: read,
+    book: { id, isbn: null, series: null, ...book },
+    readBy: SAMPLE_READER,
+    addedBy: SAMPLE_READER,
+  };
+}
+
+/** What the shelves hold for visitors who are not logged in, newest read first. */
+export const sampleReadings: ShelfBook[] = shelve([
+  sample('OL24468510W', '2025-09-12', {
+    title: 'Frieren: Beyond Journey’s End, Vol. 1',
+    authors: ['Kanehito Yamada', 'Tsukasa Abe'],
+    year: 2021,
+    pages: 192,
+    coverUrl: 'https://covers.openlibrary.org/b/id/11075074-L.jpg',
+    coverColor: null,
+    description:
+      'The demon king is dead and the hero’s party goes home. For the elf mage Frieren, who will outlive them all by centuries, the journey that really matters is only beginning.',
+  }),
+  sample('OL482454W', '2024-11-03', {
+    title: 'Cloud Atlas',
+    authors: ['David Mitchell'],
+    year: 2004,
+    pages: 537,
+    coverUrl: 'https://covers.openlibrary.org/b/id/6714077-L.jpg',
+    coverColor: null,
+    description:
+      'Six lives nested inside one another like Russian dolls, from a notary crossing the Pacific in 1850 to a goatherd in a far, fallen future, each one reading the story before it.',
+  }),
+  sample('OL503424W', '2023', {
+    title: 'Quo Vadis',
+    authors: ['Henryk Sienkiewicz'],
+    year: 1895,
+    pages: 477,
+    coverUrl: 'https://covers.openlibrary.org/b/id/833096-L.jpg',
+    coverColor: null,
+    description:
+      'Rome under Nero: the patrician Marcus Vinicius falls for Lygia, a Christian hostage, as the city burns and the persecution of her faith begins.',
+  }),
+  sample('OL17837119W', '2022-04-18', {
+    title: '12 Rules for Life',
+    authors: ['Jordan B. Peterson'],
+    year: 2018,
+    pages: 480,
+    coverUrl: 'https://covers.openlibrary.org/b/id/8131760-L.jpg',
+    coverColor: null,
+    description:
+      'An antidote to chaos in twelve rules, from standing up straight with your shoulders back to petting a cat when you meet one on the street.',
+  }),
+  sample('OL82586W', '2021-12-24', {
+    title: 'Harry Potter and the Deathly Hallows',
+    authors: ['J. K. Rowling'],
+    year: 2007,
+    pages: 701,
+    coverUrl: 'https://covers.openlibrary.org/b/id/15158660-L.jpg',
+    coverColor: null,
+    description:
+      'Dumbledore is gone, and Harry, Ron and Hermione leave Hogwarts behind to hunt down the Horcruxes that keep Voldemort alive.',
+    series: 'Harry Potter',
+  }),
+  sample('OL82565W', '2021-11-06', {
+    title: 'Harry Potter and the Half-Blood Prince',
+    authors: ['J. K. Rowling'],
+    year: 2005,
+    pages: 640,
+    coverUrl: 'https://covers.openlibrary.org/b/id/10716273-L.jpg',
+    coverColor: null,
+    description:
+      'Dumbledore shows Harry the memories of the boy Tom Riddle once was, while an old potions book signed by the Half-Blood Prince makes him the best in his class.',
+    series: 'Harry Potter',
+  }),
+  sample('OL82548W', '2021-09-19', {
+    title: 'Harry Potter and the Order of the Phoenix',
+    authors: ['J. K. Rowling'],
+    year: 2003,
+    pages: 870,
+    coverUrl: 'https://covers.openlibrary.org/b/id/15158666-L.jpg',
+    coverColor: null,
+    description:
+      'No one believes Voldemort is back, the Ministry sends Dolores Umbridge to Hogwarts, and Harry starts teaching his friends to defend themselves in secret.',
+    series: 'Harry Potter',
+  }),
+  sample('OL82560W', '2021-07-02', {
+    title: 'Harry Potter and the Goblet of Fire',
+    authors: ['J. K. Rowling'],
+    year: 2000,
+    pages: 672,
+    coverUrl: 'https://covers.openlibrary.org/b/id/12059372-L.jpg',
+    coverColor: null,
+    description:
+      'The Goblet of Fire names a fourth champion for the Triwizard Tournament, though Harry is too young to enter and never put his name in.',
+    series: 'Harry Potter',
+  }),
+  sample('OL82536W', '2021-05-15', {
+    title: 'Harry Potter and the Prisoner of Azkaban',
+    authors: ['J. K. Rowling'],
+    year: 1999,
+    pages: 416,
+    coverUrl: 'https://covers.openlibrary.org/b/id/10580435-L.jpg',
+    coverColor: null,
+    description: 'Sirius Black has escaped from Azkaban, and everyone says he is coming for Harry.',
+    series: 'Harry Potter',
+  }),
+  sample('OL82537W', '2021-03-08', {
+    title: 'Harry Potter and the Chamber of Secrets',
+    authors: ['J. K. Rowling'],
+    year: 1998,
+    pages: 339,
+    coverUrl: 'https://covers.openlibrary.org/b/id/15158664-L.jpg',
+    coverColor: null,
+    description:
+      'Students are being found turned to stone, and a voice in the walls only Harry can hear speaks of the Chamber of Secrets, opened once again.',
+    series: 'Harry Potter',
+  }),
+  sample('OL82563W', '2021-01-10', {
+    title: 'Harry Potter and the Philosopher’s Stone',
+    authors: ['J. K. Rowling'],
+    year: 1997,
+    pages: 302,
+    coverUrl: 'https://covers.openlibrary.org/b/id/15155833-L.jpg',
+    coverColor: null,
+    description:
+      'On his eleventh birthday, Harry Potter learns that he is a wizard, and leaves the cupboard under the stairs for Hogwarts School of Witchcraft and Wizardry.',
+    series: 'Harry Potter',
+  }),
+]);

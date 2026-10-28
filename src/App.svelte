@@ -1,6 +1,6 @@
 <script lang="ts">
   import { auth } from './lib/auth.svelte';
-  import { shelfDecor } from './lib/books';
+  import { sampleReadings, shelfDecor } from './lib/books';
   import { library } from './lib/library.svelte';
   import type { ShelfBook } from './lib/types';
   import AddBookForm from './lib/components/AddBookForm.svelte';
@@ -13,6 +13,9 @@
 
   let isLoginOpen = $state(false);
   let isAddOpen = $state(false);
+  /** visitors not logged in see a few sample books; nothing shows while the login is checked */
+  const sampling = $derived(auth.status === 'unauthenticated');
+  const readings = $derived(sampling ? sampleReadings : library.readings);
   let selected = $state.raw<{ reading: ShelfBook; spine: HTMLElement } | null>(null);
   /**
    * the open book as it is now on the shelves, so a correction shows at once; one just removed
@@ -20,7 +23,7 @@
    */
   const openReading = $derived(
     selected &&
-      (library.readings.find(({ key }) => key === selected?.reading.key) ?? selected.reading)
+      (readings.find(({ key }) => key === selected?.reading.key) ?? selected.reading)
   );
 
   // the shelves are only for those logged in
@@ -56,7 +59,8 @@
       </p>
 
       <Bookcase
-        readings={library.readings}
+        {readings}
+        tags={!sampling}
         {shelfDecor}
         onSelect={select}
         onAdd={auth.isAuthenticated ? () => (isAddOpen = true) : undefined}
