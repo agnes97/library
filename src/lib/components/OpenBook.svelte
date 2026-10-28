@@ -34,6 +34,13 @@
   const GUTTER = 32;
   /** closing replays the opening backwards, this much faster */
   const CLOSE_RATE = 1.6;
+  /** the cover's spine strip on closing, rolling up over a longer stretch than it unrolled */
+  const STRIP_CLOSING: Keyframe[] = [
+    { offset: 0, clipPath: 'inset(0 0 0 100%)' },
+    { offset: 0.3, clipPath: 'inset(0 0 0 100%)', easing: 'ease-in-out' },
+    { offset: 0.55, clipPath: 'inset(0)' },
+    { offset: 1, clipPath: 'inset(0)' },
+  ];
 
   const portrait = $derived((innerWidth.current ?? 1024) < 700);
   const layout = $derived(portrait ? PORTRAIT : LANDSCAPE);
@@ -128,6 +135,10 @@
           !(animation.effect as KeyframeEffect | null)?.pseudoElement
       );
     for (const animation of animations) {
+      // the spine on the cover rolls up through the beat the shut book rests, not as it lands
+      if (((animation.effect as KeyframeEffect).target as Element).classList.contains('strip')) {
+        (animation.effect as KeyframeEffect).setKeyframes(STRIP_CLOSING);
+      }
       animation.reverse();
       animation.updatePlaybackRate(-CLOSE_RATE);
     }
@@ -180,6 +191,10 @@
   /** a cover that failed to load, so the cloth one shows instead */
   let brokenCover = $state<string>();
   const cover = $derived(book.coverUrl !== brokenCover ? book.coverUrl : undefined);
+  /** the cover picture's width over its height, which the front board takes once it loads */
+  let coverRatio = $state<number>();
+  let brokenSpine = $state<string>();
+  const spinePhoto = $derived(book.spineUrl !== brokenSpine ? book.spineUrl : undefined);
 
   /** choosing another cover on the first page, in place of the 3D one */
   let pickingCover = $state(false);
@@ -328,7 +343,7 @@
 
 <dialog
   {@attach show}
-  class={[portrait ? 'portrait' : 'landscape', { closing, removed }]}
+  class={[portrait ? 'portrait' : 'landscape', { closing, removed, narrowed: cover && coverRatio }]}
   aria-labelledby={titleId}
   oncancel={(event) => {
     event.preventDefault();
@@ -348,6 +363,7 @@
   style:--from-r="{from.r}deg"
   style:--from-sx={from.sx}
   style:--from-sy={from.sy}
+  style:--cover-ratio={cover ? coverRatio : undefined}
   style:--c1={book.colors.c1}
   style:--c2={book.colors.c2}
   style:--book-accent={book.colors.accent}
@@ -355,7 +371,15 @@
 >
   <div class="scene">
     <div class="book">
-      <div class="board"></div>
+      <div class="board">
+        {#if cover && coverRatio}
+          <div class="board-spine" aria-hidden="true">
+            {#if spinePhoto}
+              <img src={spinePhoto} alt="" />
+            {/if}
+          </div>
+        {/if}
+      </div>
 
       <div class="page page-2">
         <div class="details">
@@ -539,7 +563,15 @@
       <div class="cover">
         <div class={['face front', { pictured: cover }]}>
           {#if cover}
-            <img src={cover} alt="" onerror={() => (brokenCover = cover)} />
+            <img
+              src={cover}
+              alt=""
+              onload={(event) => {
+                const { naturalWidth, naturalHeight } = event.currentTarget as HTMLImageElement;
+                coverRatio = naturalWidth / naturalHeight;
+              }}
+              onerror={() => (brokenCover = cover)}
+            />
           {:else}
             <span class="ornament" aria-hidden="true">❦</span>
             <span class="cover-title">{book.title}</span>
@@ -547,6 +579,14 @@
           {/if}
           <span class="shade"></span>
         </div>
+        {#if cover && coverRatio}
+          <!-- the spine fills the bare board beside the picture once the cover lifts -->
+          <div class="face strip" aria-hidden="true">
+            {#if spinePhoto}
+              <img src={spinePhoto} alt="" onerror={() => (brokenSpine = spinePhoto)} />
+            {/if}
+          </div>
+        {/if}
         <div class="face back">
           <div class="page page-1">
             <div class="leaf">
@@ -963,9 +1003,132 @@
     opacity: 0.9;
   }
 
+  /*
+   * the board is shaped like a page, not a cover, so a picture narrows the front to its own shape
+   * against the board's right edge, leaving this much of the board bare to its left; the back
+   * keeps the page's shape for the first page
+   */
+  .landscape {
+    --cover-gap: calc(
+      var(--pw) + 12px - min(var(--pw) + 12px, (var(--ph) + 24px) * var(--cover-ratio, 9))
+    );
+  }
+
+  .portrait {
+    --cover-gap: calc(
+      var(--pw) + 24px - min(var(--pw) + 24px, (var(--ph) + 12px) * var(--cover-ratio, 9))
+    );
+  }
+
   .front.pictured {
+    width: calc(100% - var(--cover-gap));
+    margin-left: auto;
     padding: 0;
-    background: var(--c2);
+  }
+
+  /*
+   * while the cover is shut, nothing shows beside the picture; the page and board under it sweep
+   * in from its edge to the spine as it opens
+   */
+  .narrowed .board,
+  .narrowed .page-2 {
+    /* where the picture starts, from the element's left edge (the portrait page is inset 12px) */
+    --uncover-from: var(--cover-gap);
+    animation: uncover var(--t) both;
+  }
+
+  .narrowed .page-2 {
+    animation-name: uncover-page;
+  }
+
+  .narrowed.portrait .page-2 {
+    --uncover-from: calc(var(--cover-gap) - 12px);
+  }
+
+  /* the spine again on the board, so lifting the cover shows the spine behind it, not a gap */
+  .board-spine {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--cover-gap);
+    overflow: hidden;
+    background: linear-gradient(135deg, var(--c1), var(--c2));
+    animation: board-spine var(--t) both;
+  }
+
+  .strip {
+    width: var(--cover-gap);
+    overflow: hidden;
+    pointer-events: none;
+    background: linear-gradient(135deg, var(--c1), var(--c2));
+    animation: strip var(--t) both;
+  }
+
+  .landscape .strip,
+  .landscape .board-spine {
+    border-radius: 2px 0 0 2px;
+  }
+
+  .portrait .strip,
+  .portrait .board-spine {
+    border-radius: 0 0 0 8px;
+  }
+
+  .strip img,
+  .board-spine img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* unrolls from the picture's edge to the spine, and rolls back up the same way on closing */
+  @keyframes strip {
+    0%,
+    42% {
+      clip-path: inset(0 0 0 100%);
+      animation-timing-function: ease-in-out;
+    }
+    55%,
+    100% {
+      clip-path: inset(0);
+    }
+  }
+
+  @keyframes uncover {
+    0%,
+    42% {
+      clip-path: inset(-200px -200px -200px var(--uncover-from));
+      animation-timing-function: ease-in-out;
+    }
+    58%,
+    100% {
+      clip-path: inset(-200px);
+    }
+  }
+
+  /* the page waits until the cover has nearly stood up, while it still hides the band by the spine */
+  @keyframes uncover-page {
+    0%,
+    57.5% {
+      clip-path: inset(-200px -200px -200px var(--uncover-from));
+      animation-timing-function: ease-in-out;
+    }
+    60%,
+    100% {
+      clip-path: inset(-200px);
+    }
+  }
+
+  /* rolls up toward the spine just ahead of the page, so whatever paints on top, none is left */
+  @keyframes board-spine {
+    0%,
+    57.5% {
+      clip-path: inset(0);
+      animation-timing-function: ease-in-out;
+    }
+    60%,
+    100% {
+      clip-path: inset(0 100% 0 0);
+    }
   }
 
   .front.pictured::before {
@@ -977,7 +1140,7 @@
     inset: 0;
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
   }
 
   /* darkens the cover as it turns edge-on */
@@ -1501,8 +1664,15 @@
     .book,
     .cover,
     .shade,
+    .strip,
+    .board,
+    .page-2,
     dialog.removed .scene {
       animation: none;
+    }
+
+    .board-spine {
+      display: none;
     }
 
     dialog::backdrop {
