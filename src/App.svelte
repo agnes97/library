@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { readings, shelfDecor } from './lib/books';
+  import { auth } from './lib/auth.svelte';
+  import { shelfDecor } from './lib/books';
+  import { library } from './lib/library.svelte';
   import type { Book } from './lib/types';
   import AddBookForm from './lib/components/AddBookForm.svelte';
   import Backdrop from './lib/components/Backdrop.svelte';
@@ -12,6 +14,12 @@
   let isLoginOpen = $state(false);
   let isAddOpen = $state(false);
   let selected = $state.raw<{ book: Book; read: string; spine: HTMLElement } | null>(null);
+
+  // the shelves are only for those logged in
+  $effect(() => {
+    if (auth.isAuthenticated) library.load();
+    else library.clear();
+  });
 
   function select(book: Book, read: string, spine: HTMLElement) {
     selected = { book, read, spine };
@@ -39,7 +47,12 @@
         Scroll, hover, click: let the pages flick.
       </p>
 
-      <Bookcase {readings} {shelfDecor} onSelect={select} onAdd={() => (isAddOpen = true)} />
+      <Bookcase
+        readings={library.readings}
+        {shelfDecor}
+        onSelect={select}
+        onAdd={auth.isAuthenticated ? () => (isAddOpen = true) : undefined}
+      />
     </main>
   </div>
 

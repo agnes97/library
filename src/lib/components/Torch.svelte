@@ -1,12 +1,21 @@
 <script lang="ts">
   type Props = {
     side: 'left' | 'right';
+    /** whether the flame burns; a click on the torch toggles it */
+    lit?: boolean;
   };
 
-  let { side }: Props = $props();
+  let { side, lit = $bindable(true) }: Props = $props();
 </script>
 
-<div class={['torch', side]} aria-hidden="true">
+<div class={['torch', side, { out: !lit }]}>
+  <button
+    type="button"
+    class="switch"
+    aria-pressed={lit}
+    aria-label="{side === 'left' ? 'Left' : 'Right'} torch"
+    onclick={() => (lit = !lit)}
+  ></button>
   <div class="halo"></div>
   <div class="plate">
     <span class="rivet" style:top="18px"></span>
@@ -49,6 +58,46 @@
     --fg: var(--light-b-glow);
   }
 
+  /* the torch itself takes clicks; its halo stays out of the way */
+  .switch {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    background: none;
+    cursor: pointer;
+    pointer-events: auto;
+  }
+
+  .switch:focus-visible {
+    outline: 2px solid var(--f2);
+    outline-offset: 4px;
+  }
+
+  .halo,
+  .flame {
+    transition:
+      opacity 0.4s ease,
+      scale 0.4s ease;
+  }
+
+  .out .halo {
+    opacity: 0;
+    animation: none;
+  }
+
+  .out .rim,
+  .out .rivet {
+    box-shadow: none;
+  }
+
+  .out .flame {
+    opacity: 0;
+    scale: 0.3 0.15;
+  }
+
   .halo {
     position: absolute;
     left: 50%;
@@ -68,6 +117,7 @@
     width: 44px;
     height: 82px;
     translate: -50% 0;
+    transform-origin: 50% 100%;
   }
 
   .fl {

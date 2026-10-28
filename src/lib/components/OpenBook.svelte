@@ -188,13 +188,15 @@
           </button>
           <span class="ornament" aria-hidden="true">❦</span>
           <h2 id={titleId}>{book.title}</h2>
-          <p class="byline">{book.author} · {book.year}</p>
+          <p class="byline">{[book.author, book.year].filter(Boolean).join(' · ')}</p>
           <div class="rule" aria-hidden="true">
             <span></span>
             <span class="diamond">◆</span>
             <span></span>
           </div>
-          <p class="description">{book.description}</p>
+          {#if book.description}
+            <p class="description">{book.description}</p>
+          {/if}
         </div>
         <p class="read-in">Last read in {read.slice(0, 4)}</p>
       </div>
@@ -549,9 +551,10 @@
     color: var(--paper-muted);
   }
 
+  /* ends above the read-in line; only the description scrolls */
   .details {
     position: absolute;
-    inset: 0;
+    inset: 0 0 76px;
     display: flex;
     flex-direction: column;
     gap: 18px;
@@ -560,12 +563,13 @@
   }
 
   .landscape .details {
-    padding: 64px 56px 72px 64px;
+    padding: 64px 56px 0 64px;
   }
 
   .portrait .details {
+    bottom: 58px;
     gap: 12px;
-    padding: 36px 28px 52px;
+    padding: 36px 28px 0;
   }
 
   /* pinned to the page's corner, below the scrolling text */
@@ -639,12 +643,18 @@
   }
 
   .description {
-    font-size: 19px;
+    flex: 1;
+    min-height: 4.8em;
+    overflow-y: auto;
+    margin-top: 10px;
+    scrollbar-width: thin;
+    font-size: 17px;
     line-height: 1.6;
   }
 
   .portrait .description {
-    font-size: 17px;
+    margin-top: 6px;
+    font-size: 15px;
   }
 
   .description::first-letter {
@@ -652,7 +662,7 @@
     margin: 4px 8px 0 0;
     font-family: var(--display);
     font-weight: 700;
-    font-size: 58px;
+    font-size: 52px;
     line-height: 0.86;
     color: var(--paper-accent);
   }

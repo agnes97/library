@@ -1,7 +1,5 @@
+import { API_URL, TOKEN_KEY } from './api';
 import type { AuthStatus, LoginBody, User } from './types';
-
-const API_URL = 'https://prismify.macovi.space';
-const TOKEN_KEY = 'accessToken';
 
 class Auth {
   user = $state.raw<User | null>(null);

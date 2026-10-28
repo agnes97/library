@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import type { Book, Shelf, ShelfBook, ShelfOptions } from '../types';
+  import type { Book, Shelf, ShelfBook, ShelfOptions, ShelfPile } from '../types';
   import AddBookButton from './AddBookButton.svelte';
   import BookSpine from './BookSpine.svelte';
   import ShelfTag from './ShelfTag.svelte';
@@ -12,10 +12,34 @@
     /** what sits on each shelf besides the spines, top shelf first */
     shelfDecor: ShelfOptions[];
     onSelect: (book: Book, read: string, spine: HTMLElement) => void;
-    onAdd: () => void;
+    /** shows the add button on the top shelf; left out for visitors who can't add */
+    onAdd?: () => void;
   };
 
   let { readings, shelfDecor, onSelect, onAdd }: Props = $props();
+
+  const TORCHES_KEY = 'torches';
+
+  function loadTorches() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(TORCHES_KEY) ?? 'null');
+      return { left: stored?.left !== false, right: stored?.right !== false };
+    } catch {
+      // storage blocked or garbled; both burn
+      return { left: true, right: true };
+    }
+  }
+
+  /** which torches burn; a dark torch takes its light off the case */
+  let lit = $state(loadTorches());
+
+  $effect(() => {
+    try {
+      localStorage.setItem(TORCHES_KEY, JSON.stringify(lit));
+    } catch {
+      // storage blocked; the torches stay as they are for this visit
+    }
+  });
 
   let wrap = $state<HTMLElement>();
   let caseElement = $state<HTMLElement>();
@@ -30,6 +54,9 @@
   const ROW_PADDING = 6;
   /** the pile's side margins, plus the room a flat book slides out into on hover */
   const PILE_MARGIN = 18;
+  /** how high a pile may grow, clear of the tag hanging over it; and the gap between its books */
+  const PILE_HEIGHT = 260;
+  const PILE_GAP = 1;
   /** the room the candle takes, margins included */
   const CANDLE_WIDTH = 30 + 22 + 26;
 
@@ -60,83 +87,110 @@
       ) - GAP
     );
 
+  /**
+   * Lay the volumes of a series read one after another in piles, a new one for each year so a
+   * pile never hides the tag marking where a year begins; every other book stands on its own.
+   * Once a pile is full, the rest of its volumes stand to its left rather than start a second pile.
+   */
+  function gather(queue: ShelfBook[]): (ShelfBook | ShelfBook[])[] {
+    const units: (ShelfBook | ShelfBook[])[] = [];
+    /** the pile the volumes of the current run of a series go on */
+    let pile: ShelfBook[] | undefined;
+    let stacked = 0;
+    for (const item of queue) {
+      if (
+        pile &&
+        (!item.lying ||
+          pile[0].book.series !== item.book.series ||
+          yearOf(pile[0]) !== yearOf(item))
+      ) {
+        pile = undefined;
+      }
+      if (!item.lying) {
+        units.push(item);
+      } else if (!pile) {
+        pile = [item];
+        units.push(pile);
+        stacked = item.width;
+      } else if (stacked + PILE_GAP + item.width <= PILE_HEIGHT) {
+        pile.push(item);
+        stacked += PILE_GAP + item.width;
+      } else {
+        // the pile is full: stand before it, after the others standing there
+        units.splice(units.length - 1, 0, item);
+      }
+    }
+    return units;
+  }
+
+  /** the room a spine or pile takes in the row; a pile is as wide as its longest book */
+  const widthOf = (unit: ShelfBook | ShelfBook[]) =>
+    Array.isArray(unit)
+      ? Math.max(...unit.map((item) => item.height)) + 2 * PILE_MARGIN
+      : unit.width;
+
+  const firstOf = (unit: ShelfBook | ShelfBook[]) => (Array.isArray(unit) ? unit[0] : unit);
+
   /** Fill the shelves top down in reading order, moving whatever does not fit to the next one. */
-  function layout(queue: ShelfBook[], decor: ShelfOptions[], across: number): Shelf[] {
+  function layout(ordered: ShelfBook[], decor: ShelfOptions[], across: number): Shelf[] {
     const shelves: Shelf[] = [];
     if (!across) return shelves;
     const inner = across - 2 * ROW_PADDING;
+    const queue = gather(ordered);
 
     let start = 0;
     while (start < queue.length) {
-      const { pile: pileSize = 0, candle = false, lean = false } = decor[shelves.length] ?? {};
+      const { candle = false, lean = false } = decor[shelves.length] ?? {};
       // the add button opens the top shelf, ahead of the newest book
-      const add = shelves.length === 0;
+      const add = shelves.length === 0 && Boolean(onAdd);
       let room = inner;
       if (candle) room -= CANDLE_WIDTH + GAP;
       if (add) room -= ADD_WIDTH;
 
-      /** the pile of books after the spines that end at `end`, and the room it takes */
-      const pileAfter = (end: number) => {
-        const pile = queue.slice(end, end + pileSize);
-        if (!pile.length) return null;
-        // a pile running into another year would hide the tag that marks where the year begins
-        if (pile.some((item) => yearOf(item) !== yearOf(queue[end - 1]))) return null;
-        // as wide as its longest book; dropped if it would crowd out the spines
-        const width = Math.max(...pile.map((item) => item.height)) + 2 * PILE_MARGIN + GAP;
-        return width <= room / 2 ? { pile, width } : null;
-      };
+      /** how far a spine tips back onto the spine before it; piles neither tip nor hold one up */
+      const tipOf = (before: ShelfBook | ShelfBook[], unit: ShelfBook | ShelfBook[]) =>
+        Array.isArray(before) || Array.isArray(unit) ? undefined : leanMargin(before, unit);
 
-      // take spines while they fit whole, next to the pile that would follow them
+      // take spines and piles while they fit whole
       let end = start + 1;
-      let used = queue[start].width;
+      let used = widthOf(queue[start]);
       while (end < queue.length) {
-        const item = queue[end];
+        const unit = queue[end];
         // a tipped book needs room to lean back onto the one before it
-        const extra = lean ? leanMargin(queue[end - 1], item) : 0;
-        const next = used + GAP + item.width;
-        if (next + extra + (pileAfter(end + 1)?.width ?? 0) > room) break;
+        const extra = lean ? (tipOf(queue[end - 1], unit) ?? 0) : 0;
+        const next = used + GAP + widthOf(unit);
+        if (next + extra > room) break;
         used = next;
         end++;
       }
-      const pile = pileAfter(end);
-      // the last spine tips over, unless it stands alone
-      const tipped =
-        lean && end - 1 > start ? leanMargin(queue[end - 2], queue[end - 1]) : undefined;
+      // the last spine tips over, unless it stands alone or next to a pile
+      const tipped = lean && end - 1 > start ? tipOf(queue[end - 2], queue[end - 1]) : undefined;
 
-      // the row centres its contents; find where each spine starts to know where its tag fits
+      // the row centres its contents; find where each item starts to know where its tag fits
       const content =
-        used +
-        (tipped ?? 0) +
-        (pile?.width ?? 0) +
-        (candle ? CANDLE_WIDTH + GAP : 0) +
-        (add ? ADD_WIDTH : 0);
+        used + (tipped ?? 0) + (candle ? CANDLE_WIDTH + GAP : 0) + (add ? ADD_WIDTH : 0);
       let offset = Math.max(0, (inner - content) / 2);
 
-      const books = queue.slice(start, end).map((item, i): ShelfBook => {
+      const items = queue.slice(start, end).map((unit, i): ShelfBook | ShelfPile => {
         const j = start + i;
         const leans = tipped !== undefined && j === end - 1;
         if (leans) offset += tipped;
-        const first = j === 0 || yearOf(item) !== yearOf(queue[j - 1]);
+        const first = j === 0 || yearOf(firstOf(unit)) !== yearOf(firstOf(queue[j - 1]));
         // the tag hangs from the left of the button and book together
         const tagAt = offset;
         if (add && i === 0) offset += ADD_WIDTH;
-        const placed = {
-          ...item,
-          lean: leans ? tipped : undefined,
-          tag: first ? yearOf(item) : undefined,
+        offset += widthOf(unit) + GAP;
+        const tag = {
+          tag: first ? yearOf(firstOf(unit)) : undefined,
           tagFlip: first && tagAt + TAG_WIDTH > inner,
         };
-        offset += item.width + GAP;
-        return placed;
+        return Array.isArray(unit)
+          ? { key: `pile-${unit[0].key}`, pile: unit, ...tag }
+          : { ...unit, lean: leans ? tipped : undefined, ...tag };
       });
 
-      shelves.push({
-        key: `shelf-${shelves.length}`,
-        books,
-        pile: pile?.pile ?? [],
-        candle,
-      });
-      start = end + (pile?.pile.length ?? 0);
+      shelves.push({ key: `shelf-${shelves.length}`, items, candle });
+      start = end;
     }
     return shelves;
   }
@@ -218,10 +272,28 @@
   });
 </script>
 
+{#snippet shelfItem(item: ShelfBook | ShelfPile)}
+  {#if 'pile' in item}
+    <div class="pile">
+      <!-- listed bottom first, stacked from the shelf up -->
+      {#each item.pile as { key, book, width, height, read } (key)}
+        <BookSpine {book} {width} {height} flat {read} {onSelect} />
+      {/each}
+    </div>
+  {:else}
+    {@const { book, width, height, lean, read } = item}
+    <BookSpine {book} {width} {height} {lean} {read} {onSelect} />
+  {/if}
+{/snippet}
+
 <div class="wrap" bind:this={wrap}>
-  <div class="pin">
-    <Torch side="left" />
-    <Torch side="right" />
+  <div
+    class="pin"
+    style:--torch-a={lit.left ? 'var(--light-a-glow)' : 'transparent'}
+    style:--torch-b={lit.right ? 'var(--light-b-glow)' : 'transparent'}
+  >
+    <Torch side="left" bind:lit={lit.left} />
+    <Torch side="right" bind:lit={lit.right} />
 
     <div class="case" bind:this={caseElement}>
       <div class="cap"></div>
@@ -241,33 +313,24 @@
             {#each shelves as shelf (shelf.key)}
               <div class="unit">
                 <div class="row">
-                  {#each shelf.books as { key, book, width, height, lean, read, tag, tagFlip }, i (key)}
-                    {#if tag}
+                  {#each shelf.items as item, i (item.key)}
+                    {#if item.tag}
                       <!-- as tall as the row, so the tag hangs from the shelf above while the
-                           spine stands on the plank -->
+                           book stands on the plank -->
                       <div class="tagged">
-                        <ShelfTag year={tag} flip={tagFlip} />
-                        {#if shelf.key === 'shelf-0' && i === 0}
+                        <ShelfTag year={item.tag} flip={item.tagFlip} />
+                        {#if onAdd && shelf.key === 'shelf-0' && i === 0}
                           <!-- as wide as the tag, so the tag hangs centred over the button -->
                           <div class="opener" style:width="{TAG_WIDTH}px">
                             <AddBookButton onclick={onAdd} />
                           </div>
                         {/if}
-                        <BookSpine {book} {width} {height} {lean} {read} {onSelect} />
+                        {@render shelfItem(item)}
                       </div>
                     {:else}
-                      <BookSpine {book} {width} {height} {lean} {read} {onSelect} />
+                      {@render shelfItem(item)}
                     {/if}
                   {/each}
-
-                  {#if shelf.pile.length}
-                    <div class="pile">
-                      <!-- listed bottom first, stacked from the shelf up -->
-                      {#each shelf.pile as { key, book, width, height, read } (key)}
-                        <BookSpine {book} {width} {height} flat {read} {onSelect} />
-                      {/each}
-                    </div>
-                  {/if}
 
                   {#if shelf.candle}
                     <div class="candle" aria-hidden="true">
@@ -280,6 +343,17 @@
                 <div class="plank"></div>
               </div>
             {/each}
+            {#if !shelves.length && onAdd}
+              <!-- no books yet: a shelf with only the add button on it -->
+              <div class="unit">
+                <div class="row">
+                  <div class="opener" style:width="{TAG_WIDTH}px">
+                    <AddBookButton onclick={onAdd} />
+                  </div>
+                </div>
+                <div class="plank"></div>
+              </div>
+            {/if}
             <div class="unit last">
               <div class="row end" bind:clientWidth={rowWidth}>
                 <p>
@@ -311,6 +385,9 @@
   .pin {
     position: sticky;
     top: 1rem;
+    transition:
+      --torch-a 0.4s ease,
+      --torch-b 0.4s ease;
   }
 
   .case {
@@ -341,8 +418,8 @@
     mix-blend-mode: screen;
     opacity: 0.7;
     background:
-      radial-gradient(ellipse 200px 420px at 0 215px, var(--light-a-glow), transparent),
-      radial-gradient(ellipse 200px 420px at 100% 215px, var(--light-b-glow), transparent);
+      radial-gradient(ellipse 200px 420px at 0 215px, var(--torch-a), transparent),
+      radial-gradient(ellipse 200px 420px at 100% 215px, var(--torch-b), transparent);
     -webkit-mask: var(--silhouette);
     mask: var(--silhouette);
   }
@@ -596,8 +673,8 @@
     pointer-events: none;
     mix-blend-mode: screen;
     background:
-      radial-gradient(ellipse 50% 42% at 0% 135px, var(--light-a-glow), transparent 100%),
-      radial-gradient(ellipse 50% 42% at 100% 135px, var(--light-b-glow), transparent 100%);
+      radial-gradient(ellipse 50% 42% at 0% 135px, var(--torch-a), transparent 100%),
+      radial-gradient(ellipse 50% 42% at 100% 135px, var(--torch-b), transparent 100%);
   }
 
   /* shelf props */

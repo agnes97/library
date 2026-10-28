@@ -285,7 +285,9 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    min-height: 48px;
+    /* fixed, so it doesn't jump as the user, the name or the webfont arrives */
+    width: 150px;
+    height: 48px;
     padding: 0 8px 0 16px;
     border: 1px solid color-mix(in srgb, var(--light-a-2) 55%, transparent);
     background: color-mix(in srgb, var(--light-a-3) 8%, rgb(10 6 8 / 0.6));
@@ -316,6 +318,13 @@
   .trigger:focus-visible {
     outline: 2px solid var(--light-a-2);
     outline-offset: 4px;
+  }
+
+  .name {
+    flex: 1;
+    overflow: hidden;
+    text-align: center;
+    white-space: nowrap;
   }
 
   .name.pending {
@@ -573,6 +582,7 @@
     }
 
     .trigger {
+      width: 48px;
       padding: 0 8px;
     }
   }

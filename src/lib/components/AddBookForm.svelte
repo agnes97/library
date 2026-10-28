@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { library } from '../library.svelte';
   import { searchBooks } from '../openLibrary';
   import type { BookResult } from '../types';
 
@@ -8,34 +9,54 @@
 
   let { onDone }: Props = $props();
 
-  /** today in local time, as an ISO date like the dates on the shelf */
+  /** a local date as an ISO date, like the dates on the shelf */
+  function isoDate(date: Date) {
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-');
+  }
+
   const now = new Date();
-  const today = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0'),
-  ].join('-');
+  const today = isoDate(now);
+  const yesterday = isoDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
   const thisYear = now.getFullYear();
-  const todayLabel = now.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
 
   let query = $state('');
   let picked = $state.raw<BookResult | null>(null);
   let results = $state.raw<BookResult[]>([]);
   let status = $state<'idle' | 'loading' | 'error'>('idle');
 
-  /** when it was read: today, a day picked by hand, or just the year when the day is forgotten */
-  let when = $state<'today' | 'day' | 'year'>('today');
+  /** when it was read: a day, or just the year when the day is forgotten */
+  let when = $state<'day' | 'year'>('day');
   let day = $state(today);
   let year = $state(thisYear);
 
-  const read = $derived(when === 'today' ? today : when === 'day' ? day : String(year));
+  let saving = $state(false);
+  let saveError = $state<string | null>(null);
+
+  const read = $derived(when === 'day' ? day : String(year));
   const isValid = $derived(
     when === 'day'
       ? Boolean(day) && day <= today
-      : when === 'year'
-        ? Number.isInteger(year) && year >= 1900 && year <= thisYear
-        : true
+      : Number.isInteger(year) && year >= 1900 && year <= thisYear
   );
+
+  /** every year it could have been read, newest first */
+  const years = Array.from({ length: thisYear - 1900 + 1 }, (_, i) => thisYear - i);
+
+  const shortcuts = [
+    { label: 'Yesterday', when: 'day', value: yesterday },
+    { label: 'Today', when: 'day', value: today },
+    { label: 'This year', when: 'year', value: String(thisYear) },
+  ] as const;
+
+  function pickShortcut(shortcut: (typeof shortcuts)[number]) {
+    when = shortcut.when;
+    if (shortcut.when === 'day') day = shortcut.value;
+    else year = thisYear;
+  }
 
   /** Searches Open Library once typing pauses, dropping any search still in flight. */
   $effect(() => {
@@ -72,16 +93,20 @@
       .join(' · ');
   }
 
-  function pick(book: BookResult) {
-    console.log('Picked', book);
-    picked = book;
-  }
-
-  function add(event: SubmitEvent) {
+  async function add(event: SubmitEvent) {
     event.preventDefault();
-    if (!isValid) return;
-    console.log('Add to library', { book: picked, read });
-    onDone();
+    if (!picked || !isValid || saving) return;
+
+    saving = true;
+    saveError = null;
+    try {
+      await library.add({ book: picked, read });
+      onDone();
+    } catch (error) {
+      saveError = error instanceof Error ? error.message : 'Saving failed, try again';
+    } finally {
+      saving = false;
+    }
   }
 </script>
 
@@ -106,47 +131,59 @@
     <fieldset>
       <legend>When did you read it?</legend>
 
-      <label class="choice">
-        <input type="radio" name="when" value="today" bind:group={when} />
-        <span>Today, {todayLabel}</span>
-      </label>
+      <div class="shortcuts">
+        {#each shortcuts as shortcut (shortcut.label)}
+          <button
+            type="button"
+            class="shortcut"
+            aria-pressed={read === shortcut.value}
+            onclick={() => pickShortcut(shortcut)}
+          >
+            {shortcut.label}
+          </button>
+        {/each}
+      </div>
 
-      <label class="choice">
-        <input type="radio" name="when" value="day" bind:group={when} />
-        <span>On another day</span>
-      </label>
-      {#if when === 'day'}
-        <input
-          class="when"
-          type="date"
-          aria-label="Day you read it"
-          max={today}
-          required
-          bind:value={day}
-        />
-      {/if}
-
-      <label class="choice">
-        <input type="radio" name="when" value="year" bind:group={when} />
-        <span>I only remember the year</span>
-      </label>
-      {#if when === 'year'}
-        <input
-          class="when"
-          type="number"
-          aria-label="Year you read it"
-          min="1900"
-          max={thisYear}
-          step="1"
-          required
-          bind:value={year}
-        />
-      {/if}
+      <!-- an exact day or only the year, side by side with a divider between -->
+      <div class="split">
+        <label class="half" class:active={when === 'day'}>
+          <span>Day</span>
+          <input
+            type="date"
+            max={today}
+            required={when === 'day'}
+            bind:value={day}
+            onfocus={() => (when = 'day')}
+            onclick={(event) => event.currentTarget.showPicker?.()}
+          />
+        </label>
+        <span class="divider" aria-hidden="true">or</span>
+        <label class="half" class:active={when === 'year'}>
+          <span>Year</span>
+          <select
+            bind:value={year}
+            onfocus={() => (when = 'year')}
+            onchange={() => (when = 'year')}
+          >
+            {#each years as option (option)}
+              <option value={option}>{option}</option>
+            {/each}
+          </select>
+        </label>
+      </div>
     </fieldset>
 
+    {#if saveError}
+      <p class="error" role="alert">{saveError}</p>
+    {/if}
+
     <div class="actions">
-      <button type="button" class="secondary" onclick={() => (picked = null)}>Back</button>
-      <button type="submit" class="primary" disabled={!isValid}>Put it on the shelf</button>
+      <button type="button" class="secondary" disabled={saving} onclick={() => (picked = null)}>
+        Back
+      </button>
+      <button type="submit" class="primary" disabled={!isValid || saving}>
+        {saving ? 'Putting it on the shelf…' : 'Put it on the shelf'}
+      </button>
     </div>
   </form>
 {:else}
@@ -173,7 +210,7 @@
         <ul>
           {#each results as book (book.key)}
             <li>
-              <button type="button" class="result" onclick={() => pick(book)}>
+              <button type="button" class="result" onclick={() => (picked = book)}>
                 {@render cover(book)}
                 <span class="text">
                   <strong>{book.title}</strong>
@@ -315,39 +352,127 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    margin: 0;
-    padding: 0;
+    /* margin, not padding: a fieldset's top padding sits under its legend */
+    margin: 1rem 0 0;
+    padding: 0 0 1.5rem;
     border: none;
   }
 
   legend {
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
     padding: 0;
     font-size: 1.125rem;
   }
 
-  .choice {
+  .shortcuts {
     display: flex;
-    align-items: center;
-    gap: 0.625rem;
+    gap: 0.5rem;
+  }
+
+  .shortcut {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: none;
+    color: var(--text);
+    font: inherit;
     cursor: pointer;
   }
 
-  .choice span {
-    font-size: 1rem;
+  .shortcut:hover {
+    background: var(--bg);
+  }
+
+  .shortcut[aria-pressed='true'] {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+
+  .shortcut:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .split {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: end;
+    gap: 1.5rem;
+    margin-top: 1rem;
+  }
+
+  .half {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s;
+  }
+
+  .half.active,
+  .half:focus-within {
+    opacity: 1;
+  }
+
+  .half > span {
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .half input,
+  .half select {
+    width: 100%;
+    min-width: 0;
+    padding: 0.125rem 0 0.375rem;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: none;
     color: var(--text);
+    font: inherit;
+    font-size: 1.25rem;
+    cursor: pointer;
+    appearance: none;
+    transition: border-color 0.15s;
   }
 
-  .choice input {
+  /* a shadow rather than a thicker border, so the two halves stay level */
+  .half.active input,
+  .half.active select {
+    border-bottom-color: var(--accent);
+    box-shadow: 0 1px 0 var(--accent);
+  }
+
+  .half input:focus-visible,
+  .half select:focus-visible {
+    outline: none;
+    border-bottom-color: var(--accent);
+  }
+
+  /* the whole field opens the calendar, so the tiny icon isn't needed */
+  .half input::-webkit-calendar-picker-indicator {
+    display: none;
+  }
+
+  .divider {
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    padding-top: 1rem;
+    font-style: italic;
+    color: var(--text-muted);
+  }
+
+  .error {
     margin: 0;
-    padding: 0;
-    accent-color: var(--accent);
-  }
-
-  /* the date or year field sits under its choice */
-  .when {
-    align-self: flex-start;
-    margin: 0 0 0.25rem 1.6rem;
+    color: var(--danger);
+    font-size: 0.8125rem;
   }
 
   .actions {
@@ -376,7 +501,7 @@
     color: var(--text);
   }
 
-  .primary:disabled {
+  .actions button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
   }
