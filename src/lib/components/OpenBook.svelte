@@ -1,18 +1,25 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { innerHeight, innerWidth } from 'svelte/reactivity/window';
-  import type { Book } from '../types';
+  import { auth } from '../auth.svelte';
+  import { library } from '../library.svelte';
+  import { editionCovers } from '../openLibrary';
+  import { shrinkPhoto } from '../photo';
+  import type { BookEdit, EditionCover, ShelfBook } from '../types';
   import BookCover3D from './BookCover3D.svelte';
 
   type Props = {
-    book: Book;
-    /** the day it was read, as an ISO date */
-    read: string;
+    reading: ShelfBook;
     /** the shelf spine the book flies out of and back into */
     spine: HTMLElement;
     onClose: () => void;
   };
 
-  let { book, read, spine, onClose }: Props = $props();
+  let { reading, spine, onClose }: Props = $props();
+
+  const book = $derived(reading.book);
+  /** only its reader can take a reading off the shelf */
+  const canRemove = $derived(reading.readBy.id === auth.user?.id);
 
   const titleId = $props.id();
 
@@ -98,6 +105,8 @@
   });
 
   let closing = $state(false);
+  /** taken off the shelf, so it fades away instead of flying back to a spine that is gone */
+  let removed = $state(false);
   let dialog: HTMLDialogElement;
 
   /** Plays every opening animation backwards from wherever it is, then closes. */
@@ -139,6 +148,145 @@
     };
   }
 
+  type Field = 'title' | 'author' | 'description';
+  /** the detail being corrected in place, and what it reads while being typed */
+  let editing = $state<Field | null>(null);
+  let draft = $state('');
+  let saving = $state(false);
+  let editError = $state<string | null>(null);
+
+  function startEditing(field: Field) {
+    if (closing || saving) return;
+    editError = null;
+    draft = (field === 'description' ? book.description : book[field]) ?? '';
+    editing = field;
+  }
+
+  function stopEditing() {
+    if (!saving) editing = null;
+  }
+
+  /** a cover that failed to load, so the cloth one shows instead */
+  let brokenCover = $state<string>();
+  const cover = $derived(book.coverUrl !== brokenCover ? book.coverUrl : undefined);
+
+  /** choosing another cover on the first page, in place of the 3D one */
+  let pickingCover = $state(false);
+  /** the editions' covers to choose from, once Open Library sends them */
+  let editions = $state.raw<EditionCover[] | null>(null);
+  let savingCover = $state(false);
+  let coverError = $state<string | null>(null);
+  let photoInput = $state<HTMLInputElement>();
+  let editionsRequest: AbortController | undefined;
+
+  async function openPicker() {
+    if (closing) return;
+    pickingCover = true;
+    coverError = null;
+    editions = null;
+    editionsRequest = new AbortController();
+    try {
+      editions = await editionCovers(book.id, book.title, editionsRequest.signal);
+    } catch (error) {
+      if (editionsRequest.signal.aborted) return;
+      console.error(error);
+      editions = [];
+      coverError = 'Open Library can’t be reached, but you can still upload a photo';
+    }
+  }
+
+  function closePicker() {
+    if (savingCover) return;
+    editionsRequest?.abort();
+    pickingCover = false;
+  }
+
+  async function saveCover(source: string | File) {
+    if (savingCover) return;
+    savingCover = true;
+    coverError = null;
+    try {
+      await library.setCover(book.id, typeof source === 'string' ? source : await shrinkPhoto(source));
+      pickingCover = false;
+    } catch (error) {
+      coverError = error instanceof Error ? error.message : 'Saving failed, try again';
+    } finally {
+      savingCover = false;
+    }
+  }
+
+  /** asking whether to really take it off the shelf */
+  let confirmingRemove = $state(false);
+  let removing = $state(false);
+  let removeError = $state<string | null>(null);
+
+  async function remove() {
+    if (removing) return;
+    removing = true;
+    removeError = null;
+    try {
+      await library.remove(reading.key);
+      closing = removed = true;
+      await tick();
+      const fades = dialog
+        .getAnimations({ subtree: true })
+        .filter(
+          (animation) => animation instanceof CSSAnimation && animation.animationName === 'removed'
+        );
+      await Promise.allSettled(fades.map((animation) => animation.finished));
+      onClose();
+    } catch (error) {
+      removeError = error instanceof Error ? error.message : 'Removing failed, try again';
+      removing = false;
+    }
+  }
+
+  /** Saves the correction for every shelf the book sits on; an empty title is dropped. */
+  async function save() {
+    if (!editing || saving) return;
+    const value = draft.trim();
+    const current = (editing === 'description' ? book.description : book[editing]) ?? '';
+    if (value === current || (editing === 'title' && !value)) {
+      editing = null;
+      return;
+    }
+
+    const edit: BookEdit =
+      editing === 'author'
+        ? {
+            authors: value
+              .split(',')
+              .map((author) => author.trim())
+              .filter(Boolean),
+          }
+        : { [editing]: value };
+
+    saving = true;
+    try {
+      await library.edit(book.id, edit);
+      editing = null;
+    } catch (error) {
+      editError = error instanceof Error ? error.message : 'Saving failed, try again';
+    } finally {
+      saving = false;
+    }
+  }
+
+  function onEditKeydown(event: KeyboardEvent) {
+    // a description takes several lines, so it is saved with ⌘/Ctrl+Enter
+    const multiline = editing === 'description';
+    if (event.key === 'Enter' && (!multiline || event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      save();
+    }
+  }
+
+  /** Focuses the field and puts the caret after what is already written. */
+  function focusEnd(node: HTMLInputElement | HTMLTextAreaElement) {
+    node.focus();
+    node.setSelectionRange(node.value.length, node.value.length);
+  }
+
   function onBackdropClick(event: MouseEvent) {
     if (event.target === event.currentTarget) requestClose();
   }
@@ -146,11 +294,15 @@
 
 <dialog
   {@attach show}
-  class={[portrait ? 'portrait' : 'landscape', { closing }]}
+  class={[portrait ? 'portrait' : 'landscape', { closing, removed }]}
   aria-labelledby={titleId}
   oncancel={(event) => {
     event.preventDefault();
-    requestClose();
+    // Escape while correcting a detail or asking to remove it only drops that
+    if (editing) stopEditing();
+    else if (pickingCover) closePicker();
+    else if (confirmingRemove) confirmingRemove = false;
+    else requestClose();
   }}
   onclick={onBackdropClick}
   style:--pw="{layout.pageWidth}px"
@@ -187,26 +339,113 @@
             </svg>
           </button>
           <span class="ornament" aria-hidden="true">❦</span>
-          <h2 id={titleId}>{book.title}</h2>
-          <p class="byline">{[book.author, book.year].filter(Boolean).join(' · ')}</p>
+          <h2 id={titleId}>
+            {#if editing === 'title'}
+              <input
+                {@attach focusEnd}
+                class="edit"
+                aria-label="Title"
+                autocomplete="off"
+                disabled={saving}
+                bind:value={draft}
+                onkeydown={onEditKeydown}
+                onblur={save}
+              />
+            {:else}
+              <button
+                type="button"
+                class="editable"
+                title="Click to correct the title"
+                onclick={() => startEditing('title')}
+              >
+                {book.title}
+              </button>
+            {/if}
+          </h2>
+          <p class="byline">
+            {#if editing === 'author'}
+              <input
+                {@attach focusEnd}
+                class="edit"
+                aria-label="Author"
+                placeholder="Separate several with commas"
+                autocomplete="off"
+                disabled={saving}
+                bind:value={draft}
+                onkeydown={onEditKeydown}
+                onblur={save}
+              />
+            {:else}
+              <button
+                type="button"
+                class={['editable', { missing: !book.author }]}
+                title="Click to correct the author"
+                onclick={() => startEditing('author')}
+              >
+                {book.author || 'Add the author'}
+              </button>
+            {/if}
+            {#if book.year}<span> · {book.year}</span>{/if}
+          </p>
           <div class="rule" aria-hidden="true">
             <span></span>
             <span class="diamond">◆</span>
             <span></span>
           </div>
-          {#if book.description}
-            <p class="description">{book.description}</p>
+          {#if editError}
+            <p class="edit-error" role="alert">{editError}</p>
+          {/if}
+          {#if editing === 'description'}
+            <textarea
+              {@attach focusEnd}
+              class="edit description"
+              aria-label="Description"
+              placeholder="What is it about?"
+              disabled={saving}
+              bind:value={draft}
+              onkeydown={onEditKeydown}
+              onblur={save}
+            ></textarea>
+          {:else if book.description}
+            <!-- not a button, so the drop cap still takes the first letter -->
+            <div
+              class="description editable"
+              role="button"
+              tabindex="0"
+              title="Click to correct the description"
+              onclick={() => startEditing('description')}
+              onkeydown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  startEditing('description');
+                }
+              }}
+            >
+              {book.description}
+            </div>
+          {:else}
+            <button
+              type="button"
+              class="editable missing add-description"
+              onclick={() => startEditing('description')}
+            >
+              Add a description
+            </button>
           {/if}
         </div>
-        <p class="read-in">Last read in {read.slice(0, 4)}</p>
+        <p class="read-in">Last read in {reading.read.slice(0, 4)}</p>
       </div>
 
       <!-- the first page is on the inside of the cover, so it turns with it -->
       <div class="cover">
-        <div class="face front">
-          <span class="ornament" aria-hidden="true">❦</span>
-          <span class="cover-title">{book.title}</span>
-          <span class="cover-author">{book.author}</span>
+        <div class={['face front', { pictured: cover }]}>
+          {#if cover}
+            <img src={cover} alt="" onerror={() => (brokenCover = cover)} />
+          {:else}
+            <span class="ornament" aria-hidden="true">❦</span>
+            <span class="cover-title">{book.title}</span>
+            <span class="cover-author">{book.author}</span>
+          {/if}
           <span class="shade"></span>
         </div>
         <div class="face back">
@@ -214,6 +453,103 @@
             <div class="leaf">
               <BookCover3D {book} height={layout.coverHeight} />
               <p class="hint">Drag the cover to turn it</p>
+            </div>
+            {#if pickingCover}
+              <div class="picker" role="group" aria-label="Choose a cover">
+                <p class="picker-title">Choose a cover</p>
+                {#if editions === null}
+                  <p class="hint">Looking through the editions…</p>
+                {:else if editions.length}
+                  <div class="editions">
+                    {#each editions as edition (edition.url)}
+                      <button
+                        type="button"
+                        class={['edition', { current: edition.url === book.coverUrl }]}
+                        title={edition.label}
+                        disabled={savingCover}
+                        onclick={() => saveCover(edition.url)}
+                      >
+                        <img src={edition.url} alt={edition.label} loading="lazy" />
+                      </button>
+                    {/each}
+                  </div>
+                {:else if !coverError}
+                  <p class="hint">Open Library has no other covers for it</p>
+                {/if}
+                {#if coverError}
+                  <p class="edit-error" role="alert">{coverError}</p>
+                {/if}
+                <span class="remove-choices">
+                  <button
+                    type="button"
+                    class="remove-button"
+                    disabled={savingCover}
+                    onclick={closePicker}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    class="remove-button"
+                    disabled={savingCover}
+                    onclick={() => photoInput?.click()}
+                  >
+                    {savingCover ? 'Saving…' : 'Upload a photo'}
+                  </button>
+                </span>
+                <input
+                  bind:this={photoInput}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  hidden
+                  onchange={(event) => {
+                    const file = event.currentTarget.files?.[0];
+                    event.currentTarget.value = '';
+                    if (file) saveCover(file);
+                  }}
+                />
+              </div>
+            {/if}
+            <div class="actions">
+              {#if removeError}
+                <p class="edit-error" role="alert">{removeError}</p>
+              {/if}
+              {#if confirmingRemove}
+                <span class="remove-ask">Take it off your shelf?</span>
+                <span class="remove-choices">
+                  <button
+                    type="button"
+                    class="remove-button"
+                    disabled={removing}
+                    onclick={() => (confirmingRemove = false)}
+                  >
+                    Keep it
+                  </button>
+                  <button
+                    type="button"
+                    class="remove-button danger"
+                    disabled={removing}
+                    onclick={remove}
+                  >
+                    {removing ? 'Removing…' : 'Remove'}
+                  </button>
+                </span>
+              {:else}
+                <span class="remove-choices">
+                  <button type="button" class="remove-button" onclick={openPicker}>
+                    Change cover
+                  </button>
+                  {#if canRemove}
+                    <button
+                      type="button"
+                      class="remove-button"
+                      onclick={() => (confirmingRemove = true)}
+                    >
+                      Remove from shelf
+                    </button>
+                  {/if}
+                </span>
+              {/if}
             </div>
           </div>
         </div>
@@ -514,6 +850,23 @@
     opacity: 0.9;
   }
 
+  .front.pictured {
+    padding: 0;
+    background: var(--c2);
+  }
+
+  .front.pictured::before {
+    content: none;
+  }
+
+  .front img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
   /* darkens the cover as it turns edge-on */
   .front > .shade {
     position: absolute;
@@ -542,6 +895,86 @@
     align-items: center;
     justify-content: center;
     gap: 24px;
+  }
+
+  /* laid over the first page, the 3D cover and the remove button */
+  .picker {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 36px 32px 18px;
+    background-color: inherit;
+    background-image: inherit;
+    border-radius: inherit;
+  }
+
+  .portrait .picker {
+    gap: 10px;
+    padding: 20px 20px 12px;
+  }
+
+  .picker-title {
+    font-family: var(--serif);
+    font-weight: 700;
+    font-size: 24px;
+    color: var(--paper-title);
+  }
+
+  .editions {
+    flex: 1;
+    align-self: stretch;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    align-content: start;
+    gap: 12px;
+    overflow-y: auto;
+    padding: 4px;
+    scrollbar-width: thin;
+  }
+
+  .edition {
+    aspect-ratio: 2 / 3;
+    padding: 0;
+    border: none;
+    border-radius: 2px 4px 4px 2px;
+    background: rgb(107 74 88 / 0.15);
+    cursor: pointer;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgb(46 32 38 / 0.3);
+    transition:
+      transform 0.15s,
+      box-shadow 0.15s;
+  }
+
+  .edition:hover:not(:disabled) {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 16px rgb(46 32 38 / 0.35);
+  }
+
+  .edition.current {
+    outline: 2px solid var(--paper-accent);
+    outline-offset: 2px;
+  }
+
+  .edition:focus-visible {
+    outline: 2px solid var(--paper-accent);
+    outline-offset: 2px;
+  }
+
+  .edition:disabled {
+    cursor: wait;
+    opacity: 0.6;
+  }
+
+  .edition img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   .hint {
@@ -667,6 +1100,168 @@
     color: var(--paper-accent);
   }
 
+  /* pinned to the bottom of the left page, level with the read-in line */
+  .actions {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+  }
+
+  .portrait .actions {
+    bottom: 12px;
+  }
+
+  .remove-ask {
+    font-style: italic;
+    font-size: 15px;
+    color: var(--paper-muted);
+  }
+
+  .remove-choices {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .remove-button {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: var(--paper-muted);
+    font-family: var(--caps);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition:
+      background-color 0.15s,
+      color 0.15s;
+  }
+
+  .remove-button:hover {
+    background: rgb(107 74 88 / 0.1);
+    color: var(--paper-title);
+  }
+
+  .remove-button.danger {
+    color: #a3243b;
+  }
+
+  .remove-button.danger:hover {
+    background: rgb(163 36 59 / 0.1);
+  }
+
+  .remove-button:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+
+  .remove-button:focus-visible {
+    outline: 2px solid var(--paper-accent);
+    outline-offset: 2px;
+  }
+
+  /* gone from the shelf: the open book fades where it lies, and the room lights up again */
+  dialog.removed .scene {
+    animation: removed 0.5s ease-in both;
+  }
+
+  dialog.removed::backdrop {
+    transition-delay: 0s;
+  }
+
+  @keyframes removed {
+    to {
+      opacity: 0;
+      scale: 0.94;
+    }
+  }
+
+  /* every detail reads as printed, and turns into a field with a single click */
+  .editable {
+    margin: 0 -6px;
+    padding: 0 6px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-align: left;
+    text-transform: inherit;
+    cursor: text;
+    transition: background-color 0.15s;
+  }
+
+  .editable:hover {
+    background: rgb(107 74 88 / 0.08);
+  }
+
+  .editable:focus-visible {
+    outline: 2px solid var(--paper-accent);
+    outline-offset: 2px;
+  }
+
+  .missing {
+    font-style: italic;
+    opacity: 0.7;
+  }
+
+  .add-description {
+    align-self: flex-start;
+    margin-top: 10px;
+    font-size: 17px;
+    font-variant: normal;
+  }
+
+  .edit {
+    width: 100%;
+    padding: 0 0 4px;
+    border: none;
+    border-bottom: 1px dashed var(--paper-accent);
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+  }
+
+  .edit:focus-visible {
+    outline: none;
+    border-bottom-style: solid;
+  }
+
+  .edit:disabled {
+    opacity: 0.6;
+  }
+
+  .edit::placeholder {
+    color: var(--paper-muted);
+    font-style: italic;
+    text-transform: none;
+    letter-spacing: normal;
+    opacity: 0.7;
+  }
+
+  textarea.edit {
+    resize: none;
+  }
+
+  .edit-error {
+    color: #a3243b;
+    font-size: 14px;
+  }
+
   .close {
     position: absolute;
     top: 14px;
@@ -769,7 +1364,8 @@
   @media (prefers-reduced-motion: reduce) {
     .book,
     .cover,
-    .shade {
+    .shade,
+    dialog.removed .scene {
       animation: none;
     }
 

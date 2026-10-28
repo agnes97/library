@@ -28,6 +28,38 @@ const SERIES_RANGE: [number, number] = [22, 40];
 /** A series longer than a trilogy lies flat only when every volume is slimmer than this. */
 const SLIM_PAGES = 300;
 
+/**
+ * Cloth dyed after a cover's dominant colour: its hue, kept as dark as the hand-picked palettes
+ * so the gilt lettering stays readable on any cover, even a white one.
+ */
+function paletteFrom(color: string): Book['colors'] {
+  const [r, g, b] = [1, 3, 5].map((at) => parseInt(color.slice(at, at + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const light = (max + min) / 2;
+  const chroma = max - min;
+  const sat = chroma === 0 ? 0 : chroma / (1 - Math.abs(2 * light - 1));
+  const hue =
+    chroma === 0
+      ? 0
+      : max === r
+        ? ((g - b) / chroma + 6) % 6
+        : max === g
+          ? (b - r) / chroma + 2
+          : (r - g) / chroma + 4;
+
+  const h = Math.round(hue * 60);
+  const s = Math.round(Math.min(sat, 0.6) * 100);
+  const l = Math.round(Math.min(Math.max(light, 0.12), 0.26) * 100);
+  return {
+    c1: `hsl(${h} ${s}% ${l}%)`,
+    c2: `hsl(${h} ${s}% ${Math.round(l / 2)}%)`,
+    // a grey cover keeps a grey accent rather than the red of hue 0
+    accent: `hsl(${h} ${s < 8 ? s : Math.max(s, 30)}% 74%)`,
+    ink: `hsl(${h} ${Math.round(s / 3)}% 91%)`,
+  };
+}
+
 /** FNV-1a, so a book gets the same colours and size on every visit. */
 function hash(text: string) {
   let h = 2166136261;
@@ -104,9 +136,10 @@ function toShelfBook({ id, read, book, readBy, addedBy }: ApiReading, lying: boo
       year: book.year ?? undefined,
       pages: book.pages ?? undefined,
       coverUrl: book.coverUrl ?? undefined,
+      coverColor: book.coverColor ?? undefined,
       description: book.description ?? undefined,
       series: book.series ?? undefined,
-      colors: PALETTES[seed % PALETTES.length],
+      colors: book.coverColor ? paletteFrom(book.coverColor) : PALETTES[seed % PALETTES.length],
     },
     // the volumes of a series share their size, give or take their thickness
     width: lying

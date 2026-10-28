@@ -30,6 +30,8 @@ export type Book = {
   year?: number;
   pages?: number;
   coverUrl?: string;
+  /** the cover's dominant colour, e.g. #4a2a1c, which the cloth is dyed after */
+  coverColor?: string;
   description?: string;
   series?: string;
   colors: {
@@ -103,24 +105,39 @@ export type Reader = {
   avatar: string | null;
 };
 
+/** an edition's cover the reader can pick instead of the one the book came with */
+export type EditionCover = {
+  /** the thumbnail; prismify fetches the large one */
+  url: string;
+  /** its title, language and year, e.g. "Malý princ · cze · 1998" */
+  label: string;
+};
+
+/** a book as prismify stores it, shared by everyone who read it */
+export type ApiBook = {
+  /** Open Library work id, e.g. OL45804W */
+  id: string;
+  title: string;
+  authors: string[];
+  year: number | null;
+  pages: number | null;
+  coverUrl: string | null;
+  coverColor: string | null;
+  isbn: string | null;
+  description: string | null;
+  series: string | null;
+};
+
+/** a correction to a book that came wrong from Open Library; an empty description clears it */
+export type BookEdit = Partial<Pick<ApiBook, 'title' | 'authors'>> & { description?: string };
+
 /** a reading as prismify's /library/readings returns it */
 export type ApiReading = {
   id: string;
   /** an ISO date, or only the year when the day is forgotten */
   read: string;
   createdAt: string;
-  book: {
-    /** Open Library work id, e.g. OL45804W */
-    id: string;
-    title: string;
-    authors: string[];
-    year: number | null;
-    pages: number | null;
-    coverUrl: string | null;
-    isbn: string | null;
-    description: string | null;
-    series: string | null;
-  };
+  book: ApiBook;
   readBy: Reader;
   addedBy: Reader;
 };

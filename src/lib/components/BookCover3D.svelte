@@ -25,6 +25,9 @@
   let ry = $state(REST_Y);
   let transition = $state('none');
   let grabbing = $state(false);
+  /** a cover that failed to load, so the cloth one shows instead */
+  let brokenCover = $state<string>();
+  const cover = $derived(book.coverUrl !== brokenCover ? book.coverUrl : undefined);
 
   /** Turns the box by dragging; letting go away from it (or lifting a finger) sends it home. */
   function draggable(host: HTMLElement) {
@@ -147,10 +150,19 @@
     style:transform="rotateX({rx}deg) rotateY({ry}deg)"
     style:transition
   >
-    <div class="face front">
-      <span class="ornament" aria-hidden="true">❦</span>
-      <span class="title">{book.title}</span>
-      <span class="author">{book.author}</span>
+    <div class={['face front', { pictured: cover }]}>
+      {#if cover}
+        <img
+          src={cover}
+          alt="Cover of {book.title}"
+          draggable="false"
+          onerror={() => (brokenCover = cover)}
+        />
+      {:else}
+        <span class="ornament" aria-hidden="true">❦</span>
+        <span class="title">{book.title}</span>
+        <span class="author">{book.author}</span>
+      {/if}
     </div>
     <div class="face back"></div>
     <div class="face spine"><span>{book.title}</span></div>
@@ -211,6 +223,24 @@
     border: 1px solid var(--book-accent);
     border-radius: 2px;
     opacity: 0.7;
+  }
+
+  .front.pictured {
+    padding: 0;
+    background: var(--c2);
+  }
+
+  .front.pictured::before {
+    content: none;
+  }
+
+  .front img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
   }
 
   /* hinge groove next to the spine and a soft gloss */

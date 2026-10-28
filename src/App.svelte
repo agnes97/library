@@ -2,7 +2,7 @@
   import { auth } from './lib/auth.svelte';
   import { shelfDecor } from './lib/books';
   import { library } from './lib/library.svelte';
-  import type { Book } from './lib/types';
+  import type { ShelfBook } from './lib/types';
   import AddBookForm from './lib/components/AddBookForm.svelte';
   import Backdrop from './lib/components/Backdrop.svelte';
   import Bookcase from './lib/components/Bookcase.svelte';
@@ -13,7 +13,15 @@
 
   let isLoginOpen = $state(false);
   let isAddOpen = $state(false);
-  let selected = $state.raw<{ book: Book; read: string; spine: HTMLElement } | null>(null);
+  let selected = $state.raw<{ reading: ShelfBook; spine: HTMLElement } | null>(null);
+  /**
+   * the open book as it is now on the shelves, so a correction shows at once; one just removed
+   * stays open as it was while it fades away
+   */
+  const openReading = $derived(
+    selected &&
+      (library.readings.find(({ key }) => key === selected?.reading.key) ?? selected.reading)
+  );
 
   // the shelves are only for those logged in
   $effect(() => {
@@ -21,8 +29,8 @@
     else library.clear();
   });
 
-  function select(book: Book, read: string, spine: HTMLElement) {
-    selected = { book, read, spine };
+  function select(reading: ShelfBook, spine: HTMLElement) {
+    selected = { reading, spine };
   }
 </script>
 
@@ -70,10 +78,9 @@
   {/if}
 </Modal>
 
-{#if selected}
+{#if selected && openReading}
   <OpenBook
-    book={selected.book}
-    read={selected.read}
+    reading={openReading}
     spine={selected.spine}
     onClose={() => (selected = null)}
   />

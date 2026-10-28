@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import type { Book, Shelf, ShelfBook, ShelfOptions, ShelfPile } from '../types';
+  import type { Shelf, ShelfBook, ShelfOptions, ShelfPile } from '../types';
   import AddBookButton from './AddBookButton.svelte';
   import BookSpine from './BookSpine.svelte';
   import ShelfTag from './ShelfTag.svelte';
@@ -11,7 +11,7 @@
     readings: ShelfBook[];
     /** what sits on each shelf besides the spines, top shelf first */
     shelfDecor: ShelfOptions[];
-    onSelect: (book: Book, read: string, spine: HTMLElement) => void;
+    onSelect: (reading: ShelfBook, spine: HTMLElement) => void;
     /** shows the add button on the top shelf; left out for visitors who can't add */
     onAdd?: () => void;
   };
@@ -276,13 +276,14 @@
   {#if 'pile' in item}
     <div class="pile">
       <!-- listed bottom first, stacked from the shelf up -->
-      {#each item.pile as { key, book, width, height, read } (key)}
-        <BookSpine {book} {width} {height} flat {read} {onSelect} />
+      {#each item.pile as volume (volume.key)}
+        {@const { book, width, height } = volume}
+        <BookSpine {book} {width} {height} flat onSelect={(spine) => onSelect(volume, spine)} />
       {/each}
     </div>
   {:else}
-    {@const { book, width, height, lean, read } = item}
-    <BookSpine {book} {width} {height} {lean} {read} {onSelect} />
+    {@const { book, width, height, lean } = item}
+    <BookSpine {book} {width} {height} {lean} onSelect={(spine) => onSelect(item, spine)} />
   {/if}
 {/snippet}
 

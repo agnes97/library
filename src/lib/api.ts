@@ -6,7 +6,9 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
   const token = localStorage.getItem(TOKEN_KEY);
   const headers = new Headers(init.headers);
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  if (init.body) headers.set('Content-Type', 'application/json');
+  // a form sets its own multipart boundary
+  if (init.body && !(init.body instanceof FormData))
+    headers.set('Content-Type', 'application/json');
 
   const response = await fetch(`${API_URL}${path}`, { ...init, headers });
   const data = await response.json().catch(() => ({}));

@@ -9,13 +9,11 @@
     lean?: number;
     /** lying on its side in a pile: `width` becomes its thickness, `height` its length */
     flat?: boolean;
-    /** the day it was read, as an ISO date */
-    read: string;
-    /** gets the spine too, so the open book can fly out of it and back */
-    onSelect: (book: Book, read: string, spine: HTMLElement) => void;
+    /** gets the spine, so the open book can fly out of it and back */
+    onSelect: (spine: HTMLElement) => void;
   };
 
-  let { book, width, height, lean, flat = false, read, onSelect }: Props = $props();
+  let { book, width, height, lean, flat = false, onSelect }: Props = $props();
 </script>
 
 <button
@@ -29,7 +27,7 @@
   style:--c2={book.colors.c2}
   style:--book-accent={book.colors.accent}
   style:--ink={book.colors.ink}
-  onclick={(event) => onSelect(book, read, event.currentTarget)}
+  onclick={(event) => onSelect(event.currentTarget)}
 >
   <span class="band"></span>
   <span class="title">{book.title}</span>

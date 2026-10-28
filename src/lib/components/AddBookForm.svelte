@@ -33,14 +33,27 @@
   let day = $state(today);
   let year = $state(thisYear);
 
+  /** the title and authors to shelve it under, for when Open Library has them wrong or missing */
+  let title = $state('');
+  let authors = $state('');
+
+  /** Picks a result, prefilled as the book is already shelved when someone has read it before. */
+  function pick(book: BookResult) {
+    const stored = library.stored(book.key);
+    title = stored?.title ?? book.title;
+    authors = (stored?.authors ?? book.authors).join(', ');
+    picked = book;
+  }
+
   let saving = $state(false);
   let saveError = $state<string | null>(null);
 
   const read = $derived(when === 'day' ? day : String(year));
   const isValid = $derived(
-    when === 'day'
-      ? Boolean(day) && day <= today
-      : Number.isInteger(year) && year >= 1900 && year <= thisYear
+    Boolean(title.trim()) &&
+      (when === 'day'
+        ? Boolean(day) && day <= today
+        : Number.isInteger(year) && year >= 1900 && year <= thisYear)
   );
 
   /** every year it could have been read, newest first */
@@ -87,8 +100,8 @@
     };
   });
 
-  function details(book: BookResult) {
-    return [book.authors.join(', '), book.year, book.pages && `${book.pages} pages`]
+  function details(book: BookResult, withAuthors = true) {
+    return [withAuthors && book.authors.join(', '), book.year, book.pages && `${book.pages} pages`]
       .filter(Boolean)
       .join(' · ');
   }
@@ -100,7 +113,15 @@
     saving = true;
     saveError = null;
     try {
-      await library.add({ book: picked, read });
+      const book = {
+        ...picked,
+        title: title.trim(),
+        authors: authors
+          .split(',')
+          .map((author) => author.trim())
+          .filter(Boolean),
+      };
+      await library.add({ book, read });
       onDone();
     } catch (error) {
       saveError = error instanceof Error ? error.message : 'Saving failed, try again';
@@ -122,9 +143,21 @@
   <form class="confirm" onsubmit={add}>
     <div class="picked">
       {@render cover(picked, true)}
-      <div class="text">
-        <strong>{picked.title}</strong>
-        <small>{details(picked)}</small>
+      <div class="text fields">
+        <label class="field title">
+          <span>Title</span>
+          <input type="text" required autocomplete="off" bind:value={title} />
+        </label>
+        <label class="field">
+          <span>Author</span>
+          <input
+            type="text"
+            autocomplete="off"
+            placeholder="Separate several with commas"
+            bind:value={authors}
+          />
+        </label>
+        <small>{details(picked, false)}</small>
       </div>
     </div>
 
@@ -210,7 +243,7 @@
         <ul>
           {#each results as book (book.key)}
             <li>
-              <button type="button" class="result" onclick={() => (picked = book)}>
+              <button type="button" class="result" onclick={() => pick(book)}>
                 {@render cover(book)}
                 <span class="text">
                   <strong>{book.title}</strong>
@@ -344,8 +377,44 @@
     gap: 1rem;
   }
 
-  .picked strong {
+  .fields {
+    flex: 1;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
+  /* underlined like the day and year below, as the details read on a card */
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+
+  .field > span {
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .field input {
+    padding: 0.125rem 0 0.375rem;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: none;
+    transition: border-color 0.15s;
+  }
+
+  .field input:focus-visible {
+    outline: none;
+    border-bottom-color: var(--accent);
+    box-shadow: 0 1px 0 var(--accent);
+  }
+
+  .field.title input {
     font-size: 1.125rem;
+    font-weight: 600;
   }
 
   fieldset {
