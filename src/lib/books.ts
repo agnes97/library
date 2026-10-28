@@ -1,4 +1,4 @@
-import type { Book, Shelf, ShelfBook } from './types';
+import type { Book, ShelfBook, ShelfOptions } from './types';
 
 export const books: Book[] = [
   {
@@ -43,44 +43,27 @@ export const books: Book[] = [
 const WIDTHS = [52, 44, 60, 38, 66, 48, 56, 42, 62, 46];
 const HEIGHTS = [286, 248, 270, 300, 262, 236, 292, 254, 278, 244];
 
-type ShelfOptions = {
-  /** how many books lie flat in a pile after the spines */
-  pile?: number;
-  candle?: boolean;
-  /** tip the last book over */
-  lean?: boolean;
-};
+const LAST_READ = Date.UTC(2026, 9, 24);
+const DAY = 24 * 60 * 60 * 1000;
 
-function fillShelf(
-  shelf: number,
-  offset: number,
-  count: number,
-  { pile = 0, candle = false, lean = false }: ShelfOptions = {}
-): Shelf {
-  const place = (i: number, prefix = ''): ShelfBook => {
-    const book = books[(offset + i) % books.length];
-    return {
-      key: `${book.id}-${shelf}-${prefix}${i}`,
-      book,
-      width: WIDTHS[(i * 3 + shelf * 7) % WIDTHS.length],
-      height: HEIGHTS[(i * 7 + shelf * 3) % HEIGHTS.length],
-      lean: lean && i === count - 1,
-    };
-  };
-
+/** Every book read, newest first; the bookcase fills its shelves in this order. */
+export const readings: ShelfBook[] = Array.from({ length: 83 }, (_, i): ShelfBook => {
+  const book = books[i % books.length];
   return {
-    key: `shelf-${shelf}`,
-    books: Array.from({ length: count }, (_, i) => place(i)),
-    pile: Array.from({ length: pile }, (_, i) => place(count + i, 'pile-')),
-    candle,
+    key: `${book.id}-${i}`,
+    book,
+    width: WIDTHS[(i * 3) % WIDTHS.length],
+    height: HEIGHTS[(i * 7) % HEIGHTS.length],
+    read: new Date(LAST_READ - i * 7 * DAY).toISOString().slice(0, 10),
   };
-}
+}).toSorted((a, b) => b.read.localeCompare(a.read));
 
-export const shelves: Shelf[] = [
-  fillShelf(0, 0, 16),
-  fillShelf(1, 2, 11, { pile: 3 }),
-  fillShelf(2, 1, 15, { lean: true }),
-  fillShelf(3, 3, 12, { candle: true }),
-  fillShelf(4, 0, 15, { lean: true }),
-  fillShelf(5, 2, 16),
+/** What sits on each shelf besides the spines, top shelf first; the shelves below get nothing. */
+export const shelfDecor: ShelfOptions[] = [
+  {},
+  { pile: 3 },
+  { lean: true },
+  { candle: true },
+  { lean: true },
+  {},
 ];

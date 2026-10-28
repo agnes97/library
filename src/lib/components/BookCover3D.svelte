@@ -37,8 +37,8 @@
     // the angles the box shows right now (it may be halfway through the swing back)
     function readPose() {
       const matrix = new DOMMatrix(getComputedStyle(box).transform);
-      ry = (Math.atan2(matrix.m13, matrix.m11) * 180) / Math.PI;
-      rx = (Math.atan2(matrix.m32, matrix.m22) * 180) / Math.PI;
+      ry = (Math.atan2(matrix.m31, matrix.m11) * 180) / Math.PI;
+      rx = (Math.atan2(matrix.m23, matrix.m22) * 180) / Math.PI;
     }
 
     function goHome() {
@@ -81,7 +81,12 @@
 
     function onPointerMove(event: PointerEvent) {
       if (!grabbing) return;
-      ry += (event.clientX - lastX) * SPEED;
+      // the button came up somewhere the pointerup never reached us
+      if (event.pointerType === 'mouse' && (event.buttons & 1) === 0) {
+        onRelease(event);
+        return;
+      }
+      ry +=(event.clientX - lastX) * SPEED;
       rx = clamp(rx - (event.clientY - lastY) * SPEED, -85, 85);
       lastX = event.clientX;
       lastY = event.clientY;
@@ -107,6 +112,8 @@
     host.addEventListener('pointermove', onPointerMove);
     host.addEventListener('pointerup', onRelease);
     host.addEventListener('pointercancel', onRelease);
+    // capture can be dropped without a pointerup, which would leave the drag stuck on
+    host.addEventListener('lostpointercapture', onRelease);
     host.addEventListener('pointerleave', onPointerLeave);
 
     return () => {
@@ -114,6 +121,7 @@
       host.removeEventListener('pointermove', onPointerMove);
       host.removeEventListener('pointerup', onRelease);
       host.removeEventListener('pointercancel', onRelease);
+      host.removeEventListener('lostpointercapture', onRelease);
       host.removeEventListener('pointerleave', onPointerLeave);
     };
   }

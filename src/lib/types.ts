@@ -35,8 +35,22 @@ export type ShelfBook = {
   width: number;
   /** spine height in px */
   height: number;
-  /** tipped against its neighbour */
-  lean: boolean;
+  /** tipped back onto its neighbour, standing this many px off it */
+  lean?: number;
+  /** the day it was read, as an ISO date */
+  read: string;
+  /** the year on the tag hanging over it, when it is the first book read that year */
+  tag?: number;
+  /** hang the tag from the book's right edge, as there is no room for it on the right */
+  tagFlip?: boolean;
+};
+
+export type ShelfOptions = {
+  /** how many books lie flat in a pile after the spines */
+  pile?: number;
+  candle?: boolean;
+  /** tip the last book over */
+  lean?: boolean;
 };
 
 export type Shelf = {

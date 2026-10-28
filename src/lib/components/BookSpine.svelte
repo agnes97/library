@@ -5,26 +5,31 @@
     book: Book;
     width: number;
     height: number;
-    lean?: boolean;
+    /** tip back onto the book before it, standing this many px off it */
+    lean?: number;
     /** lying on its side in a pile: `width` becomes its thickness, `height` its length */
     flat?: boolean;
-    onSelect: (book: Book) => void;
+    /** the day it was read, as an ISO date */
+    read: string;
+    /** gets the spine too, so the open book can fly out of it and back */
+    onSelect: (book: Book, read: string, spine: HTMLElement) => void;
   };
 
-  let { book, width, height, lean = false, flat = false, onSelect }: Props = $props();
+  let { book, width, height, lean, flat = false, read, onSelect }: Props = $props();
 </script>
 
 <button
   type="button"
-  class={['spine', { lean, flat }]}
+  class={['spine', { lean: lean !== undefined, flat }]}
   aria-label="{book.title} by {book.author}"
   style:--w="{width}px"
   style:--h="{height}px"
+  style:--lean={lean === undefined ? undefined : `${lean}px`}
   style:--c1={book.colors.c1}
   style:--c2={book.colors.c2}
   style:--book-accent={book.colors.accent}
   style:--ink={book.colors.ink}
-  onclick={() => onSelect(book)}
+  onclick={(event) => onSelect(book, read, event.currentTarget)}
 >
   <span class="band"></span>
   <span class="title">{book.title}</span>
@@ -74,10 +79,11 @@
     translate: 0 -16px;
   }
 
+  /* pivots on its bottom left corner, so it stays whole above the shelf */
   .lean {
-    rotate: 9deg;
+    rotate: -9deg;
     transform-origin: bottom left;
-    margin-left: 22px;
+    margin-left: var(--lean);
   }
 
   .flat {

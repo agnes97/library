@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { shelves } from './lib/books';
+  import { readings, shelfDecor } from './lib/books';
   import type { Book } from './lib/types';
   import Backdrop from './lib/components/Backdrop.svelte';
-  import BookDetail from './lib/components/BookDetail.svelte';
   import Bookcase from './lib/components/Bookcase.svelte';
   import Header from './lib/components/Header.svelte';
   import LoginForm from './lib/components/LoginForm.svelte';
   import Modal from './lib/components/Modal.svelte';
+  import OpenBook from './lib/components/OpenBook.svelte';
 
   let isLoginOpen = $state(false);
-  let selected = $state.raw<Book | null>(null);
+  let selected = $state.raw<{ book: Book; read: string; spine: HTMLElement } | null>(null);
 
-  function select(book: Book) {
-    selected = book;
+  function select(book: Book, read: string, spine: HTMLElement) {
+    selected = { book, read, spine };
   }
 </script>
 
@@ -38,7 +38,7 @@
         from it; click to open it.
       </p>
 
-      <Bookcase {shelves} onSelect={select} />
+      <Bookcase {readings} {shelfDecor} onSelect={select} />
     </main>
 
     <footer>© 2022 - {new Date().getFullYear()} Jana Mácová</footer>
@@ -50,18 +50,12 @@
 </Modal>
 
 {#if selected}
-  <Modal
-    title={selected.title}
-    width="600px"
-    bind:open={
-      () => selected !== null,
-      (open) => {
-        if (!open) selected = null;
-      }
-    }
-  >
-    <BookDetail book={selected} />
-  </Modal>
+  <OpenBook
+    book={selected.book}
+    read={selected.read}
+    spine={selected.spine}
+    onClose={() => (selected = null)}
+  />
 {/if}
 
 <style>
