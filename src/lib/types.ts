@@ -9,7 +9,14 @@ export type User = {
 
 export type AuthStatus = 'initializing' | 'loading' | 'authenticated' | 'unauthenticated';
 
-export type ThemeId = 'pink-purple' | 'blue' | 'green' | 'cyan-orange' | 'white';
+export type ThemeId =
+  | 'pink-purple'
+  | 'blue'
+  | 'green'
+  | 'cyan-orange'
+  | 'red-orange'
+  | 'white'
+  | 'custom';
 
 export type LoginBody = {
   email: string;

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { cubicOut } from 'svelte/easing';
+  import { slide } from 'svelte/transition';
   import { auth } from '../auth.svelte';
   import { theme, themes } from '../theme.svelte';
 
@@ -13,6 +15,14 @@
   let root = $state<HTMLDivElement>();
   let trigger = $state<HTMLButtonElement>();
   let menu = $state<HTMLDivElement>();
+
+  // the custom theme sits last; its colours are only used to decide whether it can swap
+  const options = $derived([
+    ...themes,
+    { id: 'custom' as const, label: 'Custom theme', colors: theme.custom },
+  ]);
+  // pickers follow the swatch order, so the left one always edits the left light
+  const pickerOrder = $derived<(0 | 1)[]>(theme.swapped ? [1, 0] : [0, 1]);
 
   const user = $derived(auth.isAuthenticated ? auth.user : null);
   // a stored token is still being checked; don't flash the guest state meanwhile
@@ -28,8 +38,23 @@
       .toUpperCase() ?? ''
   );
 
+  function still() {
+    return matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  // unrolls downward from the trigger and rolls back up; the side and bottom
+  // insets reach past the box so the shadow isn't cut off once it's fully open
+  function unroll(_node: Element) {
+    return {
+      duration: still() ? 0 : 220,
+      easing: cubicOut,
+      css: (t: number) =>
+        `clip-path: inset(0 -80px calc(${(1 - t) * 100}% - ${t * 100}px) -80px);`,
+    };
+  }
+
   function items() {
-    return [...(menu?.querySelectorAll<HTMLElement>('[role^="menuitem"]') ?? [])];
+    return [...(menu?.querySelectorAll<HTMLElement>('[role^="menuitem"], input[type="color"]') ?? [])];
   }
 
   async function show() {
@@ -48,8 +73,8 @@
     const index = list.indexOf(document.activeElement as HTMLElement);
     let next: number | null = null;
 
-    if (event.key === 'ArrowDown') next = (index + 1) % list.length;
-    else if (event.key === 'ArrowUp') next = (index - 1 + list.length) % list.length;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') next = (index + 1) % list.length;
+    else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') next = (index - 1 + list.length) % list.length;
     else if (event.key === 'Home') next = 0;
     else if (event.key === 'End') next = list.length - 1;
     else if (event.key === 'Escape') hide();
@@ -111,6 +136,7 @@
       tabindex="-1"
       bind:this={menu}
       onkeydown={onMenuKeydown}
+      transition:unroll
     >
       {#if user}
         <div class="who">
@@ -119,26 +145,35 @@
         </div>
       {/if}
 
-      <p class="group" id="theme-label">Torchlight</p>
+      <p class="group" id="theme-label">Color Theme</p>
 
       <div role="group" aria-labelledby="theme-label">
-        {#each themes as t (t.id)}
+        {#each options as t (t.id)}
           {@const [first, second] =
-            theme.current === t.id && theme.swapped ? [t.colors[1], t.colors[0]] : t.colors}
+            theme.swappedThemes.includes(t.id) ? [t.colors[1], t.colors[0]] : t.colors}
           <button
             type="button"
             class="item theme"
+            class:custom={t.id === 'custom'}
             role="menuitemradio"
             aria-checked={theme.current === t.id}
+            aria-label={t.id === 'custom' ? undefined : t.label}
             onclick={() => theme.set(t.id)}
           >
             <span class="swatch" aria-hidden="true">
-              <span style:background={first} style:--glow={first}></span>
-              {#if second !== first}
+              {#if t.id === 'custom'}
+                <!-- the picked colours show in the pickers below -->
+                <span class="rainbow"></span>
+              {:else}
+                <span style:background={first} style:--glow={first}></span>
+              {/if}
+              {#if second !== first && t.id !== 'custom'}
                 <span style:background={second} style:--glow={second}></span>
               {/if}
             </span>
-            <span class="label">{t.label}</span>
+            {#if t.id === 'custom'}
+              <span class="label">{t.label}</span>
+            {/if}
             {#if theme.current === t.id}
               {#if second !== first}
                 <!-- clicking the chosen theme again swaps its colours -->
@@ -175,6 +210,22 @@
             {/if}
           </button>
         {/each}
+
+        {#if theme.current === 'custom'}
+          <!-- pushes the menu open beneath it, so it slides rather than unrolls -->
+          <div class="pickers" transition:slide={{ duration: still() ? 0 : 220, easing: cubicOut }}>
+            {#each pickerOrder as index, i (index)}
+              <label class="picker">
+                <input
+                  type="color"
+                  value={theme.custom[index]}
+                  oninput={(event) => theme.setCustom(index, event.currentTarget.value)}
+                />
+                <span>{i === 0 ? 'Left torch' : 'Right torch'}</span>
+              </label>
+            {/each}
+          </div>
+        {/if}
       </div>
 
       {#if user || auth.status === 'unauthenticated'}
@@ -301,9 +352,10 @@
       0 0 40px -16px var(--light-a-glow);
   }
 
+  /* two themes to a row; the custom theme and its pickers take rows of their own */
   .menu > div[role='group'] {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 2px;
   }
 
@@ -367,8 +419,23 @@
   }
 
   .theme {
+    gap: 8px;
+  }
+
+  .custom {
+    grid-column: 1 / -1;
+    gap: 14px;
     font-family: inherit;
     font-size: 16px;
+  }
+
+  .custom .swatch {
+    width: 20px;
+    margin-right: 0;
+  }
+
+  .custom .label {
+    flex: 1;
   }
 
   .theme[aria-checked='true'] {
@@ -386,6 +453,7 @@
     flex: none;
     width: 34px;
     height: 20px;
+    margin-right: auto;
   }
 
   .swatch > span {
@@ -405,8 +473,9 @@
       0 0 10px -2px var(--glow);
   }
 
-  .label {
-    flex: 1;
+  .swatch > .rainbow {
+    background: conic-gradient(#ff4d4d, #ffb84d, #f5ff4d, #4dff88, #4dd8ff, #6b6bff, #d84dff, #ff4d4d);
+    --glow: #ffffff80;
   }
 
   .check {
@@ -423,6 +492,59 @@
   .theme:hover .swap,
   .theme:focus-visible .swap {
     opacity: 1;
+  }
+
+  .pickers {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 8px;
+    padding: 6px 12px 8px 12px;
+  }
+
+  .picker {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    font-size: 14px;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .picker input {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: none;
+    cursor: pointer;
+  }
+
+  .picker input::-webkit-color-swatch-wrapper {
+    padding: 2px;
+  }
+
+  /* kept apart: a browser drops a whole selector list it can't parse */
+  .picker input::-webkit-color-swatch {
+    border: 0;
+    border-radius: 50%;
+  }
+
+  .picker input::-moz-color-swatch {
+    border: 0;
+    border-radius: 50%;
+  }
+
+  .picker input:focus-visible {
+    outline: 2px solid var(--light-a-2);
+    outline-offset: 2px;
+  }
+
+  .picker:hover {
+    color: var(--text);
   }
 
   .separator {

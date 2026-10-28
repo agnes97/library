@@ -5,6 +5,25 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Library</title>
+    <script>
+      // applies the saved theme before first paint; theme.init() validates it once the app loads
+      try {
+        const root = document.documentElement;
+        const id = localStorage.getItem('theme');
+        if (id) root.dataset.theme = id;
+        const swapped = localStorage.getItem('theme-swapped');
+        if (swapped === 'true' || JSON.parse(swapped ?? '[]').includes(id)) {
+          root.setAttribute('data-swapped', '');
+        }
+        const custom = JSON.parse(localStorage.getItem('theme-custom') ?? 'null');
+        if (Array.isArray(custom) && custom.every((c) => /^#[0-9a-f]{6}$/i.test(c))) {
+          root.style.setProperty('--custom-a', custom[0]);
+          root.style.setProperty('--custom-b', custom[1]);
+        }
+      } catch {
+        // storage blocked or malformed; the default theme shows until the app loads
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

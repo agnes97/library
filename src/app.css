@@ -93,6 +93,18 @@
   --text-accent: #c4f3f0;
 }
 
+:root[data-theme='red-orange'] {
+  --pal-a-1: #ffe6e3;
+  --pal-a-2: #ec2222;
+  --pal-a-3: #9e1414;
+  --pal-b-1: #fff1e0;
+  --pal-b-2: #ff8800;
+  --pal-b-3: #b45a00;
+  --accent: #f0a6a0;
+  --accent-hover: #ffd4d0;
+  --text-accent: #f3c6c2;
+}
+
 :root[data-theme='white'] {
   --pal-a-1: #ffffff;
   --pal-a-2: #f4f2ff;
@@ -105,6 +117,19 @@
   --accent: #e8e4f0;
   --accent-hover: #ffffff;
   --text-accent: #f0eef5;
+}
+
+/* --custom-a and --custom-b are set from the picker; the rest is derived */
+:root[data-theme='custom'] {
+  --pal-a-1: color-mix(in srgb, var(--custom-a) 15%, white);
+  --pal-a-2: var(--custom-a);
+  --pal-a-3: color-mix(in srgb, var(--custom-a) 65%, black);
+  --pal-b-1: color-mix(in srgb, var(--custom-b) 15%, white);
+  --pal-b-2: var(--custom-b);
+  --pal-b-3: color-mix(in srgb, var(--custom-b) 65%, black);
+  --accent: color-mix(in srgb, var(--custom-a) 55%, white);
+  --accent-hover: color-mix(in srgb, var(--custom-a) 25%, white);
+  --text-accent: color-mix(in srgb, var(--custom-a) 35%, white);
 }
 
 /* registered so a theme change fades the lights instead of jumping */
