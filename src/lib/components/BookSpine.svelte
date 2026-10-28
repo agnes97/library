@@ -69,8 +69,8 @@
   .spine:hover {
     translate: 0 -16px;
     box-shadow:
-      0 0 0 1px var(--book-accent),
-      0 0 34px -6px var(--book-accent);
+      0 0 0 1px var(--light-a-2),
+      0 0 34px -6px var(--light-a-2);
   }
 
   .spine:focus-visible {

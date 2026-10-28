@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import type { Book, Shelf, ShelfBook, ShelfOptions } from '../types';
+  import AddBookButton from './AddBookButton.svelte';
   import BookSpine from './BookSpine.svelte';
   import ShelfTag from './ShelfTag.svelte';
   import Torch from './Torch.svelte';
@@ -11,9 +12,10 @@
     /** what sits on each shelf besides the spines, top shelf first */
     shelfDecor: ShelfOptions[];
     onSelect: (book: Book, read: string, spine: HTMLElement) => void;
+    onAdd: () => void;
   };
 
-  let { readings, shelfDecor, onSelect }: Props = $props();
+  let { readings, shelfDecor, onSelect, onAdd }: Props = $props();
 
   let wrap = $state<HTMLElement>();
   let caseElement = $state<HTMLElement>();
@@ -35,6 +37,8 @@
   const LEAN_ANGLE = (9 * Math.PI) / 180;
   /** the width of a hanging year tag with four digits, chains included */
   const TAG_WIDTH = 164;
+  /** the room the add button before the first book takes: a column as wide as the tag, plus its margin */
+  const ADD_WIDTH = TAG_WIDTH + 12;
 
   /** "The End", its letters lit alternately by the two lights, spaces skipped */
   const endLetters = [...'The End'].map((char, i, all) => ({
@@ -65,8 +69,11 @@
     let start = 0;
     while (start < queue.length) {
       const { pile: pileSize = 0, candle = false, lean = false } = decor[shelves.length] ?? {};
+      // the add button opens the top shelf, ahead of the newest book
+      const add = shelves.length === 0;
       let room = inner;
       if (candle) room -= CANDLE_WIDTH + GAP;
+      if (add) room -= ADD_WIDTH;
 
       /** the pile of books after the spines that end at `end`, and the room it takes */
       const pileAfter = (end: number) => {
@@ -101,7 +108,8 @@
         used +
         (tipped ?? 0) +
         (pile?.width ?? 0) +
-        (candle ? CANDLE_WIDTH + GAP : 0);
+        (candle ? CANDLE_WIDTH + GAP : 0) +
+        (add ? ADD_WIDTH : 0);
       let offset = Math.max(0, (inner - content) / 2);
 
       const books = queue.slice(start, end).map((item, i): ShelfBook => {
@@ -109,11 +117,14 @@
         const leans = tipped !== undefined && j === end - 1;
         if (leans) offset += tipped;
         const first = j === 0 || yearOf(item) !== yearOf(queue[j - 1]);
+        // the tag hangs from the left of the button and book together
+        const tagAt = offset;
+        if (add && i === 0) offset += ADD_WIDTH;
         const placed = {
           ...item,
           lean: leans ? tipped : undefined,
           tag: first ? yearOf(item) : undefined,
-          tagFlip: first && offset + TAG_WIDTH > inner,
+          tagFlip: first && tagAt + TAG_WIDTH > inner,
         };
         offset += item.width + GAP;
         return placed;
@@ -230,12 +241,18 @@
             {#each shelves as shelf (shelf.key)}
               <div class="unit">
                 <div class="row">
-                  {#each shelf.books as { key, book, width, height, lean, read, tag, tagFlip } (key)}
+                  {#each shelf.books as { key, book, width, height, lean, read, tag, tagFlip }, i (key)}
                     {#if tag}
                       <!-- as tall as the row, so the tag hangs from the shelf above while the
                            spine stands on the plank -->
                       <div class="tagged">
                         <ShelfTag year={tag} flip={tagFlip} />
+                        {#if shelf.key === 'shelf-0' && i === 0}
+                          <!-- as wide as the tag, so the tag hangs centred over the button -->
+                          <div class="opener" style:width="{TAG_WIDTH}px">
+                            <AddBookButton onclick={onAdd} />
+                          </div>
+                        {/if}
                         <BookSpine {book} {width} {height} {lean} {read} {onSelect} />
                       </div>
                     {:else}
@@ -465,6 +482,17 @@
     align-self: stretch;
     display: flex;
     align-items: flex-end;
+  }
+
+  .opener {
+    flex: none;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* centres the button a little below the middle of the shelf, clear of the tag */
+    padding-top: 48px;
+    margin-right: 12px;
   }
 
   /* the last, empty shelf */

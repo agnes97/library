@@ -47,7 +47,7 @@ const LAST_READ = Date.UTC(2026, 9, 24);
 const DAY = 24 * 60 * 60 * 1000;
 
 /** Every book read, newest first; the bookcase fills its shelves in this order. */
-export const readings: ShelfBook[] = Array.from({ length: 83 }, (_, i): ShelfBook => {
+export const readings: ShelfBook[] = Array.from({ length: 81 }, (_, i): ShelfBook => {
   const book = books[i % books.length];
   return {
     key: `${book.id}-${i}`,

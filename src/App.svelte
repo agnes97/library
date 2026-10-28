@@ -1,6 +1,7 @@
 <script lang="ts">
   import { readings, shelfDecor } from './lib/books';
   import type { Book } from './lib/types';
+  import AddBookForm from './lib/components/AddBookForm.svelte';
   import Backdrop from './lib/components/Backdrop.svelte';
   import Bookcase from './lib/components/Bookcase.svelte';
   import Header from './lib/components/Header.svelte';
@@ -9,6 +10,7 @@
   import OpenBook from './lib/components/OpenBook.svelte';
 
   let isLoginOpen = $state(false);
+  let isAddOpen = $state(false);
   let selected = $state.raw<{ book: Book; read: string; spine: HTMLElement } | null>(null);
 
   function select(book: Book, read: string, spine: HTMLElement) {
@@ -37,7 +39,7 @@
         Scroll, hover, click: let the pages flick.
       </p>
 
-      <Bookcase {readings} {shelfDecor} onSelect={select} />
+      <Bookcase {readings} {shelfDecor} onSelect={select} onAdd={() => (isAddOpen = true)} />
     </main>
   </div>
 
@@ -46,6 +48,13 @@
 
 <Modal bind:open={isLoginOpen} title="Login">
   <LoginForm onSuccess={() => (isLoginOpen = false)} />
+</Modal>
+
+<Modal bind:open={isAddOpen} title="Add a book you've read" width="640px">
+  <!-- mounted only while open, so every visit starts with an empty search -->
+  {#if isAddOpen}
+    <AddBookForm onDone={() => (isAddOpen = false)} />
+  {/if}
 </Modal>
 
 {#if selected}

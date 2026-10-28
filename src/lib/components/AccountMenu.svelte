@@ -288,7 +288,7 @@
     min-height: 48px;
     padding: 0 8px 0 16px;
     border: 1px solid color-mix(in srgb, var(--light-a-2) 55%, transparent);
-    background: rgb(20 10 16 / 0.6);
+    background: color-mix(in srgb, var(--light-a-3) 8%, rgb(10 6 8 / 0.6));
     color: color-mix(in srgb, var(--light-a-1) 65%, var(--light-a-2));
     font-family: var(--caps);
     font-weight: 600;
@@ -306,7 +306,7 @@
   .trigger:hover,
   .trigger[aria-expanded='true'] {
     border-color: var(--light-a-2);
-    background: rgb(40 18 32 / 0.8);
+    background: color-mix(in srgb, var(--light-a-3) 22%, rgb(10 6 8 / 0.8));
     color: var(--light-a-1);
     box-shadow:
       0 0 24px -4px color-mix(in srgb, var(--light-a-2) 55%, transparent),
@@ -362,7 +362,7 @@
   .who {
     margin-bottom: 6px;
     padding: 10px 12px 12px;
-    border-bottom: 1px solid #3a2934;
+    border-bottom: 1px solid var(--border);
   }
 
   .who p {
@@ -410,7 +410,7 @@
   .item:hover,
   .item:focus-visible {
     background: color-mix(in srgb, var(--light-a-2) 14%, transparent);
-    color: #fff4fa;
+    color: var(--light-a-1);
   }
 
   .item:focus-visible {

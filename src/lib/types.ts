@@ -70,3 +70,14 @@ export type Shelf = {
   /** a lit candle after the spines */
   candle: boolean;
 };
+
+export type BookResult = {
+  /** Open Library work key, e.g. /works/OL45804W */
+  key: string;
+  title: string;
+  authors: string[];
+  year?: number;
+  pages?: number;
+  coverUrl?: string;
+  isbn?: string;
+};

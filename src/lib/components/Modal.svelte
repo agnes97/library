@@ -17,6 +17,19 @@
     if (!open && dialog.open) dialog.close();
   }
 
+  // the page stays put behind an open modal; the gutter keeps the shelves from shifting
+  $effect(() => {
+    if (!open) return;
+    const root = document.documentElement;
+    const { overflow, scrollbarGutter } = root.style;
+    root.style.overflow = 'hidden';
+    root.style.scrollbarGutter = 'stable';
+    return () => {
+      root.style.overflow = overflow;
+      root.style.scrollbarGutter = scrollbarGutter;
+    };
+  });
+
   function onBackdropClick(event: MouseEvent) {
     if (event.target === event.currentTarget) open = false;
   }
