@@ -133,48 +133,171 @@
 
   const firstOf = (unit: ShelfBook | ShelfBook[]) => (Array.isArray(unit) ? unit[0] : unit);
 
-  /** Fill the shelves top down in reading order, moving whatever does not fit to the next one. */
+  /** how far a spine tips back onto the spine before it; piles neither tip nor hold one up */
+  const tipOf = (before: ShelfBook | ShelfBook[], unit: ShelfBook | ShelfBook[]) =>
+    Array.isArray(before) || Array.isArray(unit) ? undefined : leanMargin(before, unit);
+
+  const seriesOf = (unit: ShelfBook | ShelfBook[]) => firstOf(unit).book.series;
+
+  /** the room spines and piles take in a row, gaps between them included */
+  const widthOfAll = (units: (ShelfBook | ShelfBook[])[]) =>
+    units.reduce((sum, unit, i) => sum + (i ? GAP : 0) + widthOf(unit), 0);
+
+  /** the smallest a series is shrunk to so it fits one shelf; one longer than that breaks */
+  const MIN_SERIES_SCALE = 0.75;
+
+  /** where the volumes of the series `at` belongs to begin and end in the queue */
+  function seriesBounds(queue: (ShelfBook | ShelfBook[])[], at: number): [number, number] {
+    const series = seriesOf(queue[at]);
+    let from = at;
+    let to = at + 1;
+    if (!series) return [from, to];
+    while (from > 0 && seriesOf(queue[from - 1]) === series) from--;
+    while (to < queue.length && seriesOf(queue[to]) === series) to++;
+    return [from, to];
+  }
+
+  /** a photographed spine keeps its shape, as width and height shrink together */
+  const shrink = (item: ShelfBook, scale: number) => ({
+    ...item,
+    width: Math.floor(item.width * scale),
+    height: Math.floor(item.height * scale),
+  });
+
+  /** Shrinks each series a little too long for a shelf, spines and piles alike, until it fits one. */
+  function fitSeries(queue: (ShelfBook | ShelfBook[])[], inner: number) {
+    const fitted = [...queue];
+    for (let at = 0; at < queue.length; ) {
+      const [from, to] = seriesBounds(queue, at);
+      at = to;
+      const units = queue.slice(from, to);
+      if (units.length < 2 || widthOfAll(units) <= inner) continue;
+
+      // gaps and pile margins keep their size; spines and the piles' lengths shrink
+      const piles = units.filter(Array.isArray).length;
+      const fixed = (units.length - 1) * GAP + piles * 2 * PILE_MARGIN;
+      const scale = (inner - fixed) / (widthOfAll(units) - fixed);
+      if (scale < MIN_SERIES_SCALE) continue;
+
+      units.forEach((unit, i) => {
+        fitted[from + i] = Array.isArray(unit)
+          ? unit.map((item) => shrink(item, scale))
+          : shrink(unit, scale);
+      });
+    }
+    return fitted;
+  }
+
+  /**
+   * Fill the shelves top down in reading order, moving whatever does not fit to the next one. A
+   * series moves down whole rather than break across shelves, when one shelf can hold it, and
+   * the candle moves up or down a shelf when that is what keeps a series together.
+   */
   function layout(ordered: ShelfBook[], decor: ShelfOptions[], across: number): Shelf[] {
-    const shelves: Shelf[] = [];
-    if (!across) return shelves;
+    if (!across) return [];
     const inner = across - 2 * ROW_PADDING;
-    const queue = gather(ordered);
+    const queue = fitSeries(gather(ordered), inner);
 
-    let start = 0;
-    while (start < queue.length) {
-      const { candle = false, lean = false } = decor[shelves.length] ?? {};
-      // the add button opens the top shelf, ahead of the newest book
-      const add = shelves.length === 0 && Boolean(onAdd);
-      let room = inner;
-      if (candle) room -= CANDLE_WIDTH + GAP;
-      if (add) room -= ADD_WIDTH;
-
-      /** how far a spine tips back onto the spine before it; piles neither tip nor hold one up */
-      const tipOf = (before: ShelfBook | ShelfBook[], unit: ShelfBook | ShelfBook[]) =>
-        Array.isArray(before) || Array.isArray(unit) ? undefined : leanMargin(before, unit);
-
-      // take spines and piles while they fit whole
+    /** Takes spines and piles from `start` while they fit whole, a series all or none. */
+    function fill(start: number, room: number, lean: boolean) {
       let end = start + 1;
       let used = widthOf(queue[start]);
       while (end < queue.length) {
         const unit = queue[end];
-        // a tipped book needs room to lean back onto the one before it
-        const extra = lean ? (tipOf(queue[end - 1], unit) ?? 0) : 0;
+        const series = seriesOf(unit);
+        // a tipped book needs room to lean back onto the one before it, though a volume
+        // following its series in stands straight rather than wait for the next shelf
+        const continues = !!series && series === seriesOf(queue[end - 1]);
+        const extra = lean && !continues ? (tipOf(queue[end - 1], unit) ?? 0) : 0;
         const next = used + GAP + widthOf(unit);
         if (next + extra > room) break;
         used = next;
         end++;
       }
-      // the last spine tips over, unless it stands alone or next to a pile
-      const tipped = lean && end - 1 > start ? tipOf(queue[end - 2], queue[end - 1]) : undefined;
 
+      // a series broken off by the shelf's end moves down whole, unless no shelf can hold it
+      let deferred = false;
+      if (end < queue.length) {
+        const [from, to] = seriesBounds(queue, end);
+        if (from > start && from < end && widthOfAll(queue.slice(from, to)) <= inner) {
+          end = from;
+          used = widthOfAll(queue.slice(start, end));
+          deferred = true;
+        }
+      }
+      const series = end < queue.length && seriesOf(queue[end]);
+      const split = !!series && series === seriesOf(queue[end - 1]);
+      return { end, used, room, deferred, split };
+    }
+
+    type Row = {
+      /** the queue's units from `start` up to `end` */
+      start: number;
+      end: number;
+      used: number;
+      tipped?: number;
+      add: boolean;
+      /** the unit in the queue the candle stands before, `end` when after them all */
+      candleAt: number | null;
+    };
+
+    const contentOf = (row: Row) =>
+      row.used +
+      (row.tipped ?? 0) +
+      (row.candleAt !== null ? CANDLE_WIDTH + GAP : 0) +
+      (row.add ? ADD_WIDTH : 0);
+
+    /** before the series closing the row, so it stands apart; at the end when none does */
+    function candleSpot({ start, end }: Row) {
+      const [from] = seriesBounds(queue, end - 1);
+      return seriesOf(queue[end - 1]) && from > start && end - from > 1 ? from : end;
+    }
+
+    const rows: Row[] = [];
+    /** a candle that gave up its shelf to a series and found no room on the one above */
+    let candleMoved = false;
+    let start = 0;
+    while (start < queue.length) {
+      const options = decor[rows.length] ?? {};
+      const lean = options.lean ?? false;
+      let candle = candleMoved || (options.candle ?? false);
+      // the add button opens the top shelf, ahead of the newest book
+      const add = rows.length === 0 && Boolean(onAdd);
+      const room = inner - (add ? ADD_WIDTH : 0);
+
+      let filled = fill(start, candle ? room - CANDLE_WIDTH - GAP : room, lean);
+      candleMoved = false;
+      if (candle && (filled.deferred || filled.split)) {
+        const unlit = fill(start, room, lean);
+        if (unlit.end > filled.end) {
+          filled = unlit;
+          candle = false;
+          // up onto the shelf above when it has room, or else down onto the next one
+          const above = rows.at(-1);
+          if (above && above.candleAt === null && contentOf(above) + CANDLE_WIDTH + GAP <= inner) {
+            above.candleAt = candleSpot(above);
+          } else {
+            candleMoved = true;
+          }
+        }
+      }
+      const { end, used } = filled;
+      // the last spine tips over, unless it stands alone, next to a pile or with no room to
+      const tip = lean && end - 1 > start ? tipOf(queue[end - 2], queue[end - 1]) : undefined;
+      const tipped = tip !== undefined && used + tip <= filled.room ? tip : undefined;
+
+      rows.push({ start, end, used, tipped, add, candleAt: candle ? end : null });
+      start = end;
+    }
+
+    return rows.map((row, shelf): Shelf => {
+      const { start: from, end, tipped, add, candleAt } = row;
       // the row centres its contents; find where each item starts to know where its tag fits
-      const content =
-        used + (tipped ?? 0) + (candle ? CANDLE_WIDTH + GAP : 0) + (add ? ADD_WIDTH : 0);
-      let offset = Math.max(0, (inner - content) / 2);
+      let offset = Math.max(0, (inner - contentOf(row)) / 2);
 
-      const items = queue.slice(start, end).map((unit, i): ShelfBook | ShelfPile => {
-        const j = start + i;
+      const items = queue.slice(from, end).map((unit, i): ShelfBook | ShelfPile => {
+        const j = from + i;
+        if (j === candleAt) offset += CANDLE_WIDTH + GAP;
         const leans = tipped !== undefined && j === end - 1;
         if (leans) offset += tipped;
         const first =
@@ -192,10 +315,12 @@
           : { ...unit, lean: leans ? tipped : undefined, ...tag };
       });
 
-      shelves.push({ key: `shelf-${shelves.length}`, items, candle });
-      start = end;
-    }
-    return shelves;
+      return {
+        key: `shelf-${shelf}`,
+        items,
+        candleAt: candleAt === null ? null : candleAt - from,
+      };
+    });
   }
 
   const shelves = $derived(layout(readings, shelfDecor, rowWidth));
@@ -275,6 +400,14 @@
   });
 </script>
 
+{#snippet candle()}
+  <div class="candle" aria-hidden="true">
+    <span class="candle-glow"></span>
+    <span class="candle-flame"></span>
+    <span class="saucer"></span>
+  </div>
+{/snippet}
+
 {#snippet shelfItem(item: ShelfBook | ShelfPile)}
   {#if 'pile' in item}
     <div class="pile">
@@ -318,6 +451,9 @@
               <div class="unit">
                 <div class="row">
                   {#each shelf.items as item, i (item.key)}
+                    {#if i === shelf.candleAt}
+                      {@render candle()}
+                    {/if}
                     {#if item.tag}
                       <!-- as tall as the row, so the tag hangs from the shelf above while the
                            book stands on the plank -->
@@ -336,12 +472,8 @@
                     {/if}
                   {/each}
 
-                  {#if shelf.candle}
-                    <div class="candle" aria-hidden="true">
-                      <span class="candle-glow"></span>
-                      <span class="candle-flame"></span>
-                      <span class="saucer"></span>
-                    </div>
+                  {#if shelf.candleAt === shelf.items.length}
+                    {@render candle()}
                   {/if}
                 </div>
                 <div class="plank"></div>

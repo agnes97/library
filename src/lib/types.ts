@@ -92,8 +92,8 @@ export type Shelf = {
   key: string;
   /** standing spines and piles of series volumes, in reading order */
   items: (ShelfBook | ShelfPile)[];
-  /** a lit candle after the spines */
-  candle: boolean;
+  /** the item a lit candle stands before, or as many as there are when it stands after them all */
+  candleAt: number | null;
 };
 
 export type BookResult = {

@@ -125,13 +125,13 @@ function volumeFromTitle(title: string): number | undefined {
 }
 
 /**
- * The volumes of a series read in the same year, highest number first as if read in order; one
- * with no number keeps its place among them.
+ * The volumes of a series read in the same year, lowest number first, so the first volume stands
+ * leftmost or lies at the bottom of the pile; one with no number keeps its place among them.
  */
 function inSeriesOrder(run: ShelfBook[]): ShelfBook[] {
   const numbered = run
     .filter(({ book }) => book.seriesNumber !== undefined)
-    .toSorted((a, b) => (b.book.seriesNumber ?? 0) - (a.book.seriesNumber ?? 0));
+    .toSorted((a, b) => (a.book.seriesNumber ?? 0) - (b.book.seriesNumber ?? 0));
   return run.map((item) => (item.book.seriesNumber === undefined ? item : numbered.shift()!));
 }
 
@@ -212,10 +212,8 @@ function sample(
   book: Omit<
     ApiBook,
     'id' | 'isbn' | 'series' | 'seriesNumber' | 'spineUrl' | 'spineColor' | 'spineRatio'
-  > & {
-    series?: string;
-    seriesNumber?: number;
-  }
+  > &
+    Partial<Pick<ApiBook, 'series' | 'seriesNumber' | 'spineUrl' | 'spineColor' | 'spineRatio'>>
 ): ApiReading {
   return {
     id: `sample-${id}`,
@@ -257,6 +255,244 @@ export const sampleReadings: ShelfBook[] = shelve([
     coverColor: null,
     description:
       'Six lives nested inside one another like Russian dolls, from a notary crossing the Pacific in 1850 to a goatherd in a far, fallen future, each one reading the story before it.',
+  }),
+  // the reader photographed every spine of this one
+  sample('OL7924103W', '2024', {
+    title: 'The Eye of the World',
+    authors: ['Robert Jordan'],
+    year: 1990,
+    pages: 782,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL7924103W-89c3cc1fa9d9.webp',
+    coverColor: '#111518',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL7924103W-4e83d09147f4.webp',
+    spineColor: '#8c4945',
+    spineRatio: 0.229,
+    description:
+      'The Wheel of Time turns and Ages come and go, leaving memories that become legend. Legend fades to myth, and even myth is long forgotten when the Age that gave it birth returns again. In the Third Age, an Age of Prophecy, the World and Time themselves hang in the balance. What was, what will be, and what is, may yet fall under the Shadow.',
+    series: 'Wheel of Time',
+    seriesNumber: 1,
+  }),
+  sample('OL7924135W', '2024', {
+    title: 'The Great Hunt (The Wheel of Time Book 2)',
+    authors: ['Robert Jordan'],
+    year: 1990,
+    pages: 656,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL7924135W-96e7b184e875.webp',
+    coverColor: '#e9e9e9',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL7924135W-473f13b64f32.webp',
+    spineColor: '#773435',
+    spineRatio: 0.197,
+    description:
+      'Now in development for TV!\r\n\r\nSince its debut in 1990, The Wheel of Time® by Robert Jordan has captivated millions of readers around the globe with its scope, originality, and compelling characters.\r\n\r\nThe Wheel of Time turns and Ages come and go, leaving memories that become legend. Legend fades to myth, and even myth is long forgotten when the Age that gave it birth returns again. In the Third Age, an Age of Prophecy, the World and Time themselves hang in the balance. What was, what will be, and what is, may yet fall under the Shadow.\r\n\r\nFor centuries, gleemen have told the tales of The Great Hunt of the Horn. So many tales about each of th Hunters, and so many Hunters to tell of...Now the Horn itself is found: the Horn of Valere long thought only legend, the Horn which will raise the dead heroes of the ages. And it is stolen.\r\n\r\nTV series update: "Sony will produce along with Red Eagle Entertainment and Radar Pictures. Rafe Judkins is attached to write and executive produce. Judkins previously worked on shows such as ABC’s “Agents of SHIELD,” the Netflix series “Hemlock Grove,” and the NBC series “Chuck.” Red Eagle partners Rick Selvage and Larry Mondragon will executive produce along with Radar’s Ted Field and Mike Weber. Darren Lemke will also executive produce, with Jordan’s widow Harriet McDougal serving as consulting producer." —*Variety*\r\n\r\nThe Wheel of Time**®**\r\nNew Spring: The Novel\r\n#1 The Eye of the World\r\n#2 The Great Hunt\r\n#3 The Dragon Reborn\r\n#4 The Shadow Rising\r\n#5 The Fires of Heaven\r\n#6 Lord of Chaos\r\n#7 A Crown of Swords\r\n#8 The Path of Daggers\r\n#9 Winter\'s Heart\r\n#10 Crossroads of Twilight\r\n#11 Knife of Dreams\r\n\r\nBy Robert Jordan and Brandon Sanderson\r\n#12 The Gathering Storm\r\n#13 Towers of Midnight\r\n#14 A Memory of Light',
+    series: 'Wheel of Time',
+    seriesNumber: 2,
+  }),
+  sample('OL7924143W', '2024', {
+    title: 'The Dragon Reborn',
+    authors: ['Robert Jordan'],
+    year: 1991,
+    pages: 670,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL7924143W-b14a87f8cbac.webp',
+    coverColor: '#883038',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL7924143W-0b3516fb8f10.webp',
+    spineColor: '#793435',
+    spineRatio: 0.198,
+    description:
+      "The Dragon Reborn—the leader long prophesied who will save the world, but in the saving destroy it; the savior who will run mad and kill all those dearest to him—is on the run from his destiny.\r\n\r\nAble to touch the One Power, but unable to control it, and with no one to teach him how—for no man has done it in three thousand years—Rand al'Thor knows only that he must face the Dark One. But how?\r\n\r\nWinter has stopped the war—almost—yet men are dying, calling out for the Dragon. But where is he?\r\n\r\nPerrin Aybara is in pursuit with Moiraine Sedai, her Warder Lan, and Loial the Ogier. Bedeviled by dreams, Perrin is grappling with another deadly problem—how is he to escape the loss of his own humanity?\r\n\r\nEgwene, Elayne and Nynaeve are approaching Tar Valon, where Mat will be healed—if he lives until they arrive. But who will tell the Amyrlin their news—that the Black Ajah, long thought only a hideous rumor, is all too real? They cannot know that in Tar Valon far worse awaits...\r\n\r\nAhead, for all of them, in the Heart of the Stone, lies the next great test of the Dragon reborn....",
+    series: 'Wheel of Time',
+    seriesNumber: 3,
+  }),
+  sample('OL7924199W', '2024', {
+    title: 'The Shadow Rising',
+    authors: ['Robert Jordan'],
+    year: 1992,
+    pages: 984,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL7924199W-27061a6a855e.webp',
+    coverColor: '#2a2b30',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL7924199W-17cb956481eb.webp',
+    spineColor: '#b36c4c',
+    spineRatio: 0.213,
+    description:
+      'The Wheel of Time turns and Ages come and go, leaving memories that become legend. Legend fades to myth, and even myth is long forgotten when the Age that gave it birth returns again. In the Third Age, an Age of Prophecy, the World and Time themselves hang in the balance. What was, what will be, and what is, may yet fall under the Shadow.\r\nThe seals of Shayol Ghul are weak now, and the Dark One reaches out. The Shadow is rising to cover humankind.\r\nIn Tar Valon, Min sees portents of hideous doom. Will the White Tower itself be broken?\r\nIn the Two Rivers, the Whitecloaks ride in pursuit of a man with golden eyes, and in pursuit of the Dragon Reborn.\r\nIn Cantorin, among the Sea Folk, High Lady Suroth plans the return of the Seanchan armies to the mainland.\r\nIn the Stone of Tear, the Lord Dragon considers his next move. It will be something no one expects, not the Black Ajah, not Tairen nobles, not Aes Sedai, not Egwene or Elayne or Nynaeve.\r\nAgainst the Shadow rising stands the Dragon Reborn...',
+    series: 'Wheel of Time',
+    seriesNumber: 4,
+  }),
+  sample('OL7924172W', '2024', {
+    title: 'The Fires of Heaven',
+    authors: ['Robert Jordan'],
+    year: 1993,
+    pages: 894,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL7924172W-d9c0b543e119.webp',
+    coverColor: '#c76827',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL7924172W-8a34337e2768.webp',
+    spineColor: '#b35247',
+    spineRatio: 0.23,
+    description:
+      "The bonds and wards that hold the Great Lord of the Dark are slowly failing, but still his fragile prison holds. The Forsaken, immortal servants of the shadow, weave their snares and tighten their grip upon the realms of men, sure in the knowledge that their master will soon break free...\r\nRand al' Thor, the Dragon Reborn, knows that he must strike at the Enemy, but his forces are divided by treachery and by ambition. Even the Aes Sedai, ancient guardians of the Light, are riven by civil war. Betrayed by his allies, pursued by his enemies and beset by the madness that comes to the male wielders of the One Power, Rand rides out to meet the foe.",
+    series: 'Wheel of Time',
+    seriesNumber: 5,
+  }),
+  sample('OL7924208W', '2024', {
+    title: 'Lord of Chaos',
+    authors: ['Robert Jordan'],
+    year: 1994,
+    pages: 921,
+    coverUrl: 'https://covers.openlibrary.org/b/id/182398-M.jpg',
+    coverColor: null,
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL7924208W-7b8b1003d1fe.webp',
+    spineColor: '#b56b4f',
+    spineRatio: 0.223,
+    description:
+      "The Wheel of Time turns and Ages come and go, leaving memories that become legend. Legend fades to myth, and even myth is long forgotten when the Age that gave it birth returns again. In the Third Age, an Age of Prophecy, the World and Time themselves hang in the balance. What was, what will be, and what is, may yet fall under the Shadow.\r\n\r\nOn the slopes of Shayol Ghul, the Myrddraal swords are forged, and the sky is not the sky of this world;\r\n\r\nIn Salidar the White Tower in exile prepares an embassy to Caemlyn, where Rand Al'Thor, the Dragon Reborn, holds the throne--and where an unexpected visitor may change the world....\r\n\r\nIn Emond's Field, Perrin Goldeneyes, Lord of the Two Rivers, feels the pull of ta'veren to ta'veren and prepares to march...\r\n\r\nMorgase of Caemlyn finds a most unexpected, and quite unwelcome, ally....And south lies Illian, where Sammael holds sway...\r\n\r\nTV series update: \"Sony will produce along with Red Eagle Entertainment and Radar Pictures. Rafe Judkins is attached to write and executive produce. Judkins previously worked on shows such as ABC’s “Agents of SHIELD,” the Netflix series “Hemlock Grove,” and the NBC series “Chuck.” Red Eagle partners Rick Selvage and Larry Mondragon will executive produce along with Radar’s Ted Field and Mike Weber. Darren Lemke will also executive produce, with Jordan’s widow Harriet McDougal serving as consulting producer.\" —*Variety*\r\n\r\nThe Wheel of Time**®**\r\nNew Spring: The Novel\r\n#1 The Eye of the World\r\n#2 The Great Hunt\r\n#3 The Dragon Reborn\r\n#4 The Shadow Rising\r\n#5 The Fires of Heaven\r\n#6 Lord of Chaos\r\n#7 A Crown of Swords\r\n#8 The Path of Daggers\r\n#9 Winter's Heart\r\n#10 Crossroads of Twilight\r\n#11 Knife of Dreams\r\n\r\nBy Robert Jordan and Brandon Sanderson\r\n#12 The Gathering Storm\r\n#13 Towers of Midnight\r\n#14 A Memory of Light",
+    series: 'Wheel of Time',
+    seriesNumber: 6,
+  }),
+  sample('OL7924161W', '2024', {
+    title: 'A Crown of Swords (The Wheel of Time, Book 7)',
+    authors: ['Robert Jordan'],
+    year: 1996,
+    pages: 771,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL7924161W-dc4335b7d0a0.webp',
+    coverColor: '#67635b',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL7924161W-aaa9a2a62e56.webp',
+    spineColor: '#b35049',
+    spineRatio: 0.224,
+    description:
+      'Terwijl de eindstrijd tussen de Draak en het Kwade steeds dichterbij komt, wordt het klimaat langzaam aan slechter.',
+    series: 'Wheel of Time',
+    seriesNumber: 7,
+  }),
+  sample('OL1946687W', '2024', {
+    title: 'The Path of Daggers',
+    authors: ['Robert Jordan'],
+    year: 1998,
+    pages: 608,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL1946687W-5189e620ed0b.webp',
+    coverColor: '#2a5755',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL1946687W-9b6e2cc990da.webp',
+    spineColor: '#8e4e4b',
+    spineRatio: 0.205,
+    description:
+      "From Publishers Weekly\r\nThe eighth book of Jordan's bestselling The Wheel of Time saga (A Crown of Swords, etc.) opens with a renewed invasion by the Seanchans, a conquering race whose arsenal includes man-carrying flying reptiles and enslaved female magic-workers as well as powerful soldiers, many of whom have joined the Seanchans out of fear of the Dragon Reborn. The Dragon himself, Rand al'Thor, appears in only a small part of the narrative, but during that time he endures the ugly experience of seeing his magic kill his friends, heightening his fear that his destiny is to slay everyone he cares about. The first third of the book is a little slower paced than is usual for Jordan, emphasizing the growth of relationships, but the action picks up soon enough. More compact than some previous volumes in the saga, this one has the virtues readers have come to expect from the author: meticulous world-building; deft use of multiple viewpoints; highly original and intelligent systems of magic; an admirable wit; and a continuous awareness of the fate of the turnip farmer or peddler caught in the path of the heroes' armies. Unlike some authors of megasagas, Jordan chooses his words with care, creating people and events that have earned him an enormous readership. For sheer imagination and storytelling skill, if not quite for mythic resonance, The Wheel of Time now rivals Tolkien's The Lord of the Rings.",
+    series: 'Wheel of Time',
+    seriesNumber: 8,
+  }),
+  sample('OL7924207W', '2024', {
+    title: "Winter's Heart",
+    authors: ['Robert Jordan'],
+    year: 2000,
+    pages: 668,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL7924207W-767e7ec0a941.webp',
+    coverColor: '#5198ad',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL7924207W-7620ba5c5450.webp',
+    spineColor: '#b55049',
+    spineRatio: 0.184,
+    description:
+      'All I can say is this is yet another great chapter in the wheel of time.  A must for the fans. A  new people called The Kin are introduced.  Mat might meet his other wife in this story!',
+    series: 'Wheel of Time',
+    seriesNumber: 9,
+  }),
+  sample('OL7924099W', '2024', {
+    title: 'Crossroads of Twilight',
+    authors: ['Robert Jordan'],
+    year: 1995,
+    pages: 704,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL7924099W-a759888999f8.webp',
+    coverColor: '#04516b',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL7924099W-879bff8d6590.webp',
+    spineColor: '#c87050',
+    spineRatio: 0.198,
+    description:
+      "Mat Cauthon flees the Shadow and the Seanchan Empire with the kidnapped Daughter of the Nine Moons, while Perrin Aybara seeks to free his captive wife, and Egwere al'Vere seeks to reunite the Aes Sedai.",
+    series: 'Wheel of Time',
+    seriesNumber: 10,
+  }),
+  sample('OL7924194W', '2024', {
+    title: 'Knife of Dreams',
+    authors: ['Robert Jordan'],
+    year: 2005,
+    pages: 832,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL7924194W-9e6317d92531.webp',
+    coverColor: '#cbc7ae',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL7924194W-b6057542f98c.webp',
+    spineColor: '#783436',
+    spineRatio: 0.216,
+    description:
+      'In een gefantaseerde wereld maakt een ieder zich op voor de laatste strijd tussen Goed en Kwaad.',
+    series: 'Wheel of Time',
+    seriesNumber: 11,
+  }),
+  sample('OL1946681W', '2024', {
+    title: 'The Gathering Storm',
+    authors: ['Robert Jordan', 'Brandon Sanderson'],
+    year: 2009,
+    pages: 824,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL1946681W-d564993205f8.webp',
+    coverColor: '#12060f',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL1946681W-164d450b5556.webp',
+    spineColor: '#b54f47',
+    spineRatio: 0.246,
+    description:
+      'Rand al\'Thor, the Dragon Reborn, struggles to unite a fractured network of kingdoms and alliances in preparation for the Last Battle. Meanwhile, Egwene al\'Vere, the Amyrlin Seat of the rebel Aes Sedai, is being held captive by the White Tower. Knowing the Seanchan attack is imminent, she fights to hold the Aes Sedai together in an epic contest that will prove the mettle of her followers and will decide the future of the White Tower---and possibly the world itself. The first of three novels that will make up "A Memory of Light" and mark the conclusion of the Wheel of Time.',
+    series: 'Wheel of Time',
+    seriesNumber: 12,
+  }),
+  sample('OL15414340W', '2024', {
+    title: 'Towers of Midnight',
+    authors: ['Robert Jordan', 'Brandon Sanderson'],
+    year: 2010,
+    pages: 944,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL15414340W-cd5528470aae.webp',
+    coverColor: '#050505',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL15414340W-2e1b64fd09a8.webp',
+    spineColor: '#773335',
+    spineRatio: 0.282,
+    description:
+      "As the seals on the Dark One's prison crumble and the armies of the Shadow boil out of the Blight, Perrin Aybara, hunted by specters from his past, must seek answers in \"Tel'aran'rhiod\" and find a way to master the wolf within him--or lose himself to it forever. Meanwhile, Matrim Cauthon prepares for the most difficult challenge of his life ... as The Tower of Ghenjei awaits.",
+    series: 'Wheel of Time',
+    seriesNumber: 13,
+  }),
+  sample('OL16799133W', '2024', {
+    title: 'A Memory of Light',
+    authors: ['Robert Jordan', 'Brandon Sanderson'],
+    year: 2013,
+    pages: 920,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL16799133W-059c7899b40b.webp',
+    coverColor: '#f7f6f7',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL16799133W-57468f6b24c9.webp',
+    spineColor: '#723635',
+    spineRatio: 0.246,
+    description:
+      'Since 1990, when Robert Jordan’s The Wheel of Time® burst on the world with its first book, The Eye of the World, readers have been anticipating the final scenes of this extraordinary saga, which has sold over forty million copies in over thirty languages.\r\n\r\nWhen Robert Jordan died in 2007, all feared that these concluding scenes would never be written. But working from notes and partials left by Jordan, established fantasy writer Brandon Sanderson stepped in to complete the masterwork. With The Gathering Storm (Book 12) and Towers of Midnight (Book 13) behind him, both of which were # 1 New York Times hardcover bestsellers, Sanderson now re-creates the vision that Robert Jordan left behind.\r\n\r\nEdited by Jordan’s widow, who edited all of Jordan’s books, A Memory of Light will delight, enthrall, and deeply satisfy all of Jordan’s legions of readers.\r\n\r\nThe Wheel of Time turns, and Ages come and pass.\r\nWhat was, what will be, and what is,\r\nmay yet fall under the Shadow.\r\nLet the Dragon ride again on the winds of time.',
+    series: 'Wheel of Time',
+    seriesNumber: 14,
   }),
   sample('OL503424W', '2023', {
     title: 'Quo Vadis',
