@@ -4,10 +4,13 @@
   type Props = {
     open: boolean;
     title: string;
+    width?: string;
     children: Snippet;
   };
 
-  let { open = $bindable(), title, children }: Props = $props();
+  let { open = $bindable(), title, width = '400px', children }: Props = $props();
+
+  const titleId = $props.id();
 
   function sync(dialog: HTMLDialogElement) {
     if (open && !dialog.open) dialog.showModal();
@@ -23,11 +26,12 @@
   {@attach sync}
   onclose={() => (open = false)}
   onclick={onBackdropClick}
-  aria-labelledby="modal-title"
+  aria-labelledby={titleId}
+  style:--modal-width={width}
 >
   <div class="content">
     <header>
-      <h2 id="modal-title">{title}</h2>
+      <h2 id={titleId}>{title}</h2>
       <button
         type="button"
         class="close"
@@ -45,15 +49,40 @@
 <style>
   dialog {
     padding: 0;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--surface);
+    border: none;
+    border-radius: 4px;
+    background: var(--surface-raised);
     color: var(--text);
-    width: min(400px, calc(100vw - 2rem));
+    width: min(var(--modal-width), calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    box-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
   }
 
   dialog::backdrop {
-    background: rgb(0 0 0 / 0.5);
+    background: rgb(10 6 4 / 0.62);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    dialog[open] {
+      animation: dialog-in 0.22s ease-out;
+    }
+
+    dialog[open]::backdrop {
+      animation: backdrop-in 0.22s ease-out;
+    }
+  }
+
+  @keyframes dialog-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.97);
+    }
+  }
+
+  @keyframes backdrop-in {
+    from {
+      opacity: 0;
+    }
   }
 
   .content {
@@ -62,22 +91,34 @@
 
   header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
-    margin-bottom: 1rem;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
   }
 
   h2 {
     margin: 0;
-    font-size: 1.25rem;
+    font-family: var(--serif);
+    font-size: 1.5rem;
+    line-height: 1.15;
   }
 
   .close {
     border: none;
     background: none;
     color: var(--text-muted);
-    font-size: 1.5rem;
+    font-size: 1.75rem;
     line-height: 1;
     cursor: pointer;
+  }
+
+  .close:hover {
+    color: var(--text);
+  }
+
+  .close:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 </style>

@@ -27,37 +27,53 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--border);
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 1.5rem 1.5rem 0;
   }
 
   h1 {
     margin: 0;
-    font-size: 1.5rem;
+    font-family: var(--serif);
+    font-size: 2.25rem;
+    letter-spacing: -0.01em;
+    line-height: 1;
   }
 
   .user {
     display: flex;
     align-items: center;
     gap: 1rem;
+    color: var(--text-muted);
   }
 
   strong {
-    color: var(--accent);
+    color: var(--text);
   }
 
   button {
-    padding: 0.5rem 1rem;
-    border: 1px solid var(--accent);
-    border-radius: 8px;
-    background: transparent;
-    color: var(--accent);
+    padding: 0.5rem 1.125rem;
+    border: none;
+    border-radius: 0;
+    background: var(--accent);
+    color: var(--on-accent);
     font: inherit;
+    font-weight: 600;
     cursor: pointer;
   }
 
   button:hover {
-    background: var(--accent);
-    color: var(--on-accent);
+    background: #f6d18a;
+  }
+
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  @media (max-width: 560px) {
+    .user span {
+      display: none;
+    }
   }
 </style>
