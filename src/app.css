@@ -1,22 +1,31 @@
 :root {
-  --bg: #1f1610;
-  --surface: rgb(34 24 17 / 0.96);
-  --surface-raised: #2c2018;
-  --text: #f3e9dc;
-  --text-muted: #c9b8a3;
-  --border: #4a3526;
-  --accent: #f0c064;
-  --on-accent: #1b130e;
-  --danger: #f08a6c;
+  --bg: #070405;
+  --surface: rgb(20 10 16 / 0.96);
+  --surface-raised: #1a1015;
+  --text: #e8ddd0;
+  --text-muted: #c4b2bf;
+  --border: #4a3442;
+  --accent: #f0a6d4;
+  --accent-hover: #ffd1ec;
+  --on-accent: #1a0d14;
+  --danger: #ff9a8a;
 
-  --serif: Georgia, 'Times New Roman', serif;
+  --serif: 'Cormorant Garamond', Georgia, serif;
+  --caps: Cinzel, Georgia, serif;
+  --display: 'Cinzel Decorative', Georgia, serif;
 
-  --wood-wall: #4b3220;
-  --wood-plank: #93633f;
-  --wood-edge: #5a3922;
+  /* torch flames: core, body, edge and the glow they throw */
+  --rose-1: #ffe6f4;
+  --rose-2: #ff5fb7;
+  --rose-3: #b2338a;
+  --rose-glow: rgb(255 95 183 / 0.3);
+  --violet-1: #f1e6ff;
+  --violet-2: #b06bff;
+  --violet-3: #5b2bb8;
+  --violet-glow: rgb(160 96 255 / 0.3);
 
   color-scheme: dark;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'IM Fell English', Georgia, serif;
   line-height: 1.5;
 }
 
@@ -32,4 +41,47 @@ body {
   overflow-x: clip;
   background: var(--bg);
   color: var(--text);
+}
+
+a {
+  color: var(--accent);
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+/* shared by the torches and the shelf candle */
+@keyframes flick {
+  0% {
+    transform: scale(1, 1) skewX(0);
+  }
+  25% {
+    transform: scale(0.94, 1.07) skewX(2.5deg);
+  }
+  50% {
+    transform: scale(1.05, 0.95) skewX(-3deg);
+  }
+  75% {
+    transform: scale(0.97, 1.09) skewX(1.5deg);
+  }
+  100% {
+    transform: scale(1.02, 0.97) skewX(-1deg);
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  40% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 0.75;
+  }
+  70% {
+    opacity: 0.95;
+  }
 }

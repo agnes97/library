@@ -49,17 +49,19 @@
 <style>
   dialog {
     padding: 0;
-    border: none;
+    border: 1px solid rgb(240 166 212 / 0.25);
     border-radius: 4px;
     background: var(--surface-raised);
     color: var(--text);
     width: min(var(--modal-width), calc(100vw - 2rem));
     max-height: calc(100vh - 2rem);
-    box-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
+    box-shadow:
+      0 24px 60px rgb(0 0 0 / 0.7),
+      0 0 40px -12px rgb(232 111 181 / 0.35);
   }
 
   dialog::backdrop {
-    background: rgb(10 6 4 / 0.62);
+    background: rgb(7 4 5 / 0.72);
   }
 
   @media (prefers-reduced-motion: no-preference) {
@@ -100,7 +102,7 @@
   h2 {
     margin: 0;
     font-family: var(--serif);
-    font-size: 1.5rem;
+    font-size: 1.75rem;
     line-height: 1.15;
   }
 

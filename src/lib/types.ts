@@ -20,10 +20,6 @@ export type Book = {
   author: string;
   year: number;
   description: string;
-  /** spine width in px */
-  width: number;
-  /** spine height in px */
-  height: number;
   colors: {
     c1: string;
     c2: string;
@@ -35,4 +31,19 @@ export type Book = {
 export type ShelfBook = {
   key: string;
   book: Book;
+  /** spine width in px */
+  width: number;
+  /** spine height in px */
+  height: number;
+  /** tipped against its neighbour */
+  lean: boolean;
+};
+
+export type Shelf = {
+  key: string;
+  books: ShelfBook[];
+  /** a pile of books lying flat after the spines */
+  pile: boolean;
+  /** a lit candle after the spines */
+  candle: boolean;
 };
