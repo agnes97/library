@@ -26,9 +26,11 @@
       <path
         d="M11 21 C17 20 22 21 27 23 M11 28 C17 27 22 28 27 30 M11 35 C17 34 22 35 27 37 M11 42 C17 41 22 42 27 44"
       />
-      <path d="M53 21 C47 20 42 21 37 23 M53 28 C47 27 42 28 37 30 M53 35 C47 34 42 35 37 37" />
-      <path d="M44 41 V58 L47.5 55 L51 58 V40.5" />
-    </svg>
+      <path
+        d="M53 21 C47 20 42 21 37 23 M53 28 C47 27 42 28 37 30 M53 35 C47 34 42 35 37 37 M53 42 C47 41 42 42 37 44"
+      />
+      <!-- the ribbon hangs out from under the right page's bottom edge -->
+      <path d="M44 47.8 V60 L46.5 57.5 L49 60 V47.3" />    </svg>
     <div>
       <p class="eyebrow">Bibliotheca</p>
       <h1>Library</h1>

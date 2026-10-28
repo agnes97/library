@@ -6,15 +6,17 @@
     width: number;
     height: number;
     lean?: boolean;
+    /** lying on its side in a pile: `width` becomes its thickness, `height` its length */
+    flat?: boolean;
     onSelect: (book: Book) => void;
   };
 
-  let { book, width, height, lean = false, onSelect }: Props = $props();
+  let { book, width, height, lean = false, flat = false, onSelect }: Props = $props();
 </script>
 
 <button
   type="button"
-  class={['spine', { lean }]}
+  class={['spine', { lean, flat }]}
   aria-label="{book.title} by {book.author}"
   style:--w="{width}px"
   style:--h="{height}px"
@@ -76,6 +78,42 @@
     rotate: 9deg;
     transform-origin: bottom left;
     margin-left: 22px;
+  }
+
+  .flat {
+    flex-direction: row;
+    width: var(--h);
+    height: var(--w);
+    padding: 0 18px;
+    border-radius: 1px 2px 2px 1px;
+    background:
+      linear-gradient(
+        180deg,
+        rgb(255 255 255 / 0.07),
+        rgb(0 0 0 / 0.08) 45%,
+        rgb(0 0 0 / 0.6)
+      ),
+      linear-gradient(90deg, var(--c1), var(--c2));
+  }
+
+  /* slide out of the pile instead of lifting into the book above */
+  .flat:hover,
+  .flat:focus-visible {
+    translate: 16px 0;
+  }
+
+  .flat .band {
+    width: 3px;
+    height: 100%;
+    box-shadow:
+      5px 0 0 -1px var(--c2),
+      7px 0 0 -1px var(--book-accent);
+  }
+
+  .flat .title {
+    writing-mode: horizontal-tb;
+    max-width: calc(var(--h) - 96px);
+    max-height: none;
   }
 
   .band {

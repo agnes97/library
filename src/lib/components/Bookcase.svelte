@@ -16,6 +16,45 @@
   let viewport = $state<HTMLElement>();
   let stack = $state<HTMLElement>();
 
+  /** inner width of each shelf row, measured once it mounts */
+  let rowWidths = $state<number[]>([]);
+
+  /** gap between spines and the row's side padding, as in the styles below */
+  const GAP = 5;
+  const ROW_PADDING = 6;
+  /** the pile's side margins, plus the room a flat book slides out into on hover */
+  const PILE_MARGIN = 18;
+  /** the room the candle takes, margins included */
+  const CANDLE_WIDTH = 30 + 22 + 26;
+
+  /** Keep only the books that fit on the shelf whole; the rest stay off it. */
+  function fit(shelf: Shelf, rowWidth: number | undefined): Shelf {
+    if (!rowWidth) return shelf;
+    const leans = shelf.books.at(-1)?.lean ?? false;
+    let room = rowWidth - 2 * ROW_PADDING;
+    if (shelf.candle) room -= CANDLE_WIDTH + GAP;
+
+    // the pile is as wide as its longest book; drop it if it would crowd out every spine
+    const pileWidth = Math.max(0, ...shelf.pile.map((item) => item.height)) + 2 * PILE_MARGIN;
+    const pile = shelf.pile.length && pileWidth + GAP <= room / 2 ? shelf.pile : [];
+    if (pile.length) room -= pileWidth + GAP;
+
+    const books: Shelf['books'] = [];
+    let used = 0;
+    for (const item of shelf.books) {
+      // a tipped book needs its margin plus the overhang of its top (sin 9° ≈ 0.16)
+      const extra = leans ? 22 + Math.ceil(item.height * 0.16) : 0;
+      const next = used + (books.length ? GAP : 0) + item.width;
+      if (next + extra > room) break;
+      books.push({ ...item, lean: false });
+      used = next;
+    }
+    if (leans && books.length) books[books.length - 1].lean = true;
+    return { ...shelf, books, pile };
+  }
+
+  const fitted = $derived(shelves.map((shelf, i) => fit(shelf, rowWidths[i])));
+
   let viewportHeight = $state(760);
   /** How far the shelves scroll inside the case; the page gets this much extra room for it. */
   let travel = $state(0);
@@ -100,33 +139,19 @@
         <div class="pillar"></div>
         <div class="viewport" bind:this={viewport} style:height="{viewportHeight}px">
           <div class="stack" bind:this={stack}>
-            {#each shelves as shelf (shelf.key)}
+            {#each fitted as shelf, i (shelf.key)}
               <div class="unit">
-                <div class="row">
+                <div class="row" bind:clientWidth={rowWidths[i]}>
                   {#each shelf.books as { key, book, width, height, lean } (key)}
                     <BookSpine {book} {width} {height} {lean} {onSelect} />
                   {/each}
 
-                  {#if shelf.pile}
-                    <div class="pile" aria-hidden="true">
-                      <span
-                        class="flat"
-                        style:width="150px"
-                        style:height="22px"
-                        style:background="linear-gradient(180deg, #3e2246, #1f0f26)"
-                      ></span>
-                      <span
-                        class="flat"
-                        style:width="136px"
-                        style:height="18px"
-                        style:background="linear-gradient(180deg, #1a2a36, #0b141b)"
-                      ></span>
-                      <span
-                        class="flat"
-                        style:width="162px"
-                        style:height="28px"
-                        style:background="linear-gradient(180deg, #521a26, #2a0b12)"
-                      ></span>
+                  {#if shelf.pile.length}
+                    <div class="pile">
+                      <!-- listed bottom first, stacked from the shelf up -->
+                      {#each shelf.pile as { key, book, width, height } (key)}
+                        <BookSpine {book} {width} {height} flat {onSelect} />
+                      {/each}
                     </div>
                   {/if}
 
@@ -141,6 +166,12 @@
                 <div class="plank"></div>
               </div>
             {/each}
+            <div class="unit">
+              <div class="row end">
+                <p>The End</p>
+              </div>
+              <div class="plank"></div>
+            </div>
           </div>
           <div class="shade" aria-hidden="true"></div>
           <div class="lightfx" aria-hidden="true"></div>
@@ -322,19 +353,45 @@
     align-items: flex-end;
     justify-content: safe center;
     gap: 5px;
-    height: 326px;
+    /* fills the unit down to the plank, so the plank covers the seam where back panels meet */
+    height: 354px;
     padding: 0 6px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scrollbar-width: none;
+    overflow: hidden;
+  }
+
+  /* the last, empty shelf */
+  .end {
+    align-items: center;
+  }
+
+  .end p {
+    margin: 0;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 50px;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: center;
+    color: #efe2ea;
+    text-shadow:
+      0 0 28px rgb(232 111 181 / 0.28),
+      0 2px 0 #000;
   }
 
   .plank {
     position: relative;
     height: 26px;
     margin: 0 calc(-1 * var(--side));
-    background: linear-gradient(180deg, #6a4831 0, #4a3122 6px, #2e1d14 7px, #24170f 60%, #120b07);
     box-shadow: 0 18px 24px rgb(0 0 0 / 0.8);
+  }
+
+  /* the grain sits on its own layer: a filter on .plank would paint grain into the shadow too */
+  .plank::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, #6a4831 0, #4a3122 6px, #2e1d14 7px, #24170f 60%, #120b07);
     filter: url(#grainH);
   }
 
@@ -383,17 +440,10 @@
   .pile {
     flex: none;
     display: flex;
-    flex-direction: column;
+    flex-direction: column-reverse;
     align-items: center;
+    gap: 1px;
     margin: 0 18px;
-  }
-
-  .flat {
-    display: block;
-    border-radius: 1px;
-    box-shadow:
-      inset 0 2px 0 rgb(255 255 255 / 0.06),
-      inset 0 -2px 0 rgb(0 0 0 / 0.4);
   }
 
   .candle {

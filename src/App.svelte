@@ -40,6 +40,8 @@
 
       <Bookcase {shelves} onSelect={select} />
     </main>
+
+    <footer>© 2022 - {new Date().getFullYear()} Jana Mácová</footer>
   </div>
 </div>
 
@@ -75,7 +77,7 @@
     z-index: 2;
     max-width: 1060px;
     margin: 0 auto;
-    padding: 44px 24px 120px;
+    padding: 44px 24px 28px;
   }
 
   .divider {
@@ -106,6 +108,17 @@
     color: var(--text-muted);
   }
 
+  footer {
+    margin-top: 56px;
+    text-align: right;
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: 18px;
+    font-variant-numeric: lining-nums;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+  }
+
   @media (max-width: 1340px) {
     .outer {
       padding-left: 110px;
@@ -115,7 +128,7 @@
 
   @media (max-width: 760px) {
     .outer {
-      padding: 28px 16px 80px;
+      padding: 28px 16px 20px;
     }
   }
 </style>

@@ -44,7 +44,8 @@ const WIDTHS = [52, 44, 60, 38, 66, 48, 56, 42, 62, 46];
 const HEIGHTS = [286, 248, 270, 300, 262, 236, 292, 254, 278, 244];
 
 type ShelfOptions = {
-  pile?: boolean;
+  /** how many books lie flat in a pile after the spines */
+  pile?: number;
   candle?: boolean;
   /** tip the last book over */
   lean?: boolean;
@@ -54,25 +55,30 @@ function fillShelf(
   shelf: number,
   offset: number,
   count: number,
-  { pile = false, candle = false, lean = false }: ShelfOptions = {}
+  { pile = 0, candle = false, lean = false }: ShelfOptions = {}
 ): Shelf {
-  const result: ShelfBook[] = Array.from({ length: count }, (_, i) => {
+  const place = (i: number, prefix = ''): ShelfBook => {
     const book = books[(offset + i) % books.length];
     return {
-      key: `${book.id}-${shelf}-${i}`,
+      key: `${book.id}-${shelf}-${prefix}${i}`,
       book,
       width: WIDTHS[(i * 3 + shelf * 7) % WIDTHS.length],
       height: HEIGHTS[(i * 7 + shelf * 3) % HEIGHTS.length],
       lean: lean && i === count - 1,
     };
-  });
+  };
 
-  return { key: `shelf-${shelf}`, books: result, pile, candle };
+  return {
+    key: `shelf-${shelf}`,
+    books: Array.from({ length: count }, (_, i) => place(i)),
+    pile: Array.from({ length: pile }, (_, i) => place(count + i, 'pile-')),
+    candle,
+  };
 }
 
 export const shelves: Shelf[] = [
   fillShelf(0, 0, 16),
-  fillShelf(1, 2, 11, { pile: true }),
+  fillShelf(1, 2, 11, { pile: 3 }),
   fillShelf(2, 1, 15, { lean: true }),
   fillShelf(3, 3, 12, { candle: true }),
   fillShelf(4, 0, 15, { lean: true }),

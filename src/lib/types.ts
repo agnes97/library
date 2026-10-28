@@ -42,8 +42,8 @@ export type ShelfBook = {
 export type Shelf = {
   key: string;
   books: ShelfBook[];
-  /** a pile of books lying flat after the spines */
-  pile: boolean;
+  /** books lying flat in a pile after the spines, bottom one first */
+  pile: ShelfBook[];
   /** a lit candle after the spines */
   candle: boolean;
 };
