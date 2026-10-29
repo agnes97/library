@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { coverShape } from '../covers';
   import type { Book } from '../types';
 
   type Props = {
@@ -26,7 +27,9 @@
   let grabbing = $state(false);
   /** a cover that failed to load, so the cloth one shows instead */
   let brokenCover = $state<string>();
-  const cover = $derived(book.coverUrl !== brokenCover ? book.coverUrl : undefined);
+  const cover = $derived(
+    book.coverUrl !== brokenCover && coverShape(book.coverUrl) !== null ? book.coverUrl : undefined
+  );
   let brokenSpine = $state<string>();
   const spinePhoto = $derived(book.spineUrl !== brokenSpine ? book.spineUrl : undefined);
   /** a photographed spine keeps its shape, as far as the cover's own shape allows */

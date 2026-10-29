@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { innerHeight, innerWidth } from 'svelte/reactivity/window';
   import { auth } from '../auth.svelte';
+  import { coverShape, preloadCover } from '../covers';
   import { library } from '../library.svelte';
   import { editionCovers } from '../openLibrary';
   import { shrinkPhoto } from '../photo';
@@ -36,11 +37,21 @@
   const CLOSE_RATE = 1.6;
   /** the cover's spine strip on closing, rolling up over a longer stretch than it unrolled */
   const STRIP_CLOSING: Keyframe[] = [
-    { offset: 0, clipPath: 'inset(0 0 0 100%)' },
-    { offset: 0.3, clipPath: 'inset(0 0 0 100%)', easing: 'ease-in-out' },
-    { offset: 0.55, clipPath: 'inset(0)' },
-    { offset: 1, clipPath: 'inset(0)' },
+    { offset: 0, clipPath: 'inset(0)' },
+    { offset: 0.45, clipPath: 'inset(0)', easing: 'ease-in-out' },
+    { offset: 0.7, clipPath: 'inset(0 0 0 100%)' },
+    { offset: 1, clipPath: 'inset(0 0 0 100%)' },
   ];
+  /** the named easings as curves, so they can be run backwards */
+  const EASINGS: Record<string, number[]> = {
+    linear: [0, 0, 1, 1],
+    ease: [0.25, 0.1, 0.25, 1],
+    'ease-in': [0.42, 0, 1, 1],
+    'ease-out': [0, 0, 0.58, 1],
+    'ease-in-out': [0.42, 0, 0.58, 1],
+  };
+  /** how long the book waits for a cover still loading before it flies without its shape */
+  const COVER_WAIT = 400;
 
   const portrait = $derived((innerWidth.current ?? 1024) < 700);
   const layout = $derived(portrait ? PORTRAIT : LANDSCAPE);
@@ -119,37 +130,112 @@
   let removed = $state(false);
   let dialog: HTMLDialogElement;
 
-  /** Plays every opening animation backwards from wherever it is, then closes. */
+  /** The same curve run backwards, e.g. ease-in for ease-out. */
+  function mirrorEasing(easing: string) {
+    const curve =
+      EASINGS[easing] ?? easing.match(/^cubic-bezier\((.*)\)$/)?.[1].split(',').map(Number);
+    if (!curve) return 'linear';
+    const [x1, y1, x2, y2] = curve;
+    return `cubic-bezier(${1 - x2}, ${1 - y2}, ${1 - x1}, ${1 - y1})`;
+  }
+
+  /** The keyframes back to front, so playing them forwards plays the originals backwards. */
+  function mirror(keyframes: ComputedKeyframe[]): Keyframe[] {
+    const last = keyframes.length - 1;
+    return keyframes.map((_, i) => {
+      const { computedOffset, easing, offset, composite, ...frame } = keyframes[last - i];
+      // the stretch to the next frame eases like the one that led here, run backwards
+      const next = keyframes[last - i - 1];
+      return {
+        ...frame,
+        offset: 1 - computedOffset,
+        easing: next ? mirrorEasing(next.easing) : 'linear',
+      };
+    });
+  }
+
+  /**
+   * Plays every opening animation backwards from wherever it is, then closes. Each runs
+   * forwards on mirrored keyframes rather than at a negative rate, which made browsers re-render
+   * the shrinking book on every frame.
+   */
   async function requestClose() {
     if (closing) return;
     closing = true;
     // the spine has slid back into the shelf since it was clicked
     origin = measure();
+    const onShelf = `translate(${from.x}px, ${from.y}px) rotate(${from.r}deg) scale(${from.sx}, ${from.sy})`;
 
-    const animations = dialog
+    const closings = dialog
       .getAnimations({ subtree: true })
       // the backdrop keeps its own timing
       .filter(
         (animation) =>
           animation instanceof CSSAnimation &&
           !(animation.effect as KeyframeEffect | null)?.pseudoElement
-      );
-    for (const animation of animations) {
-      // the spine on the cover rolls up through the beat the shut book rests, not as it lands
-      if (((animation.effect as KeyframeEffect).target as Element).classList.contains('strip')) {
-        (animation.effect as KeyframeEffect).setKeyframes(STRIP_CLOSING);
-      }
-      animation.reverse();
-      animation.updatePlaybackRate(-CLOSE_RATE);
-    }
-    await Promise.allSettled(animations.map((animation) => animation.finished));
+      )
+      .map((opening) => {
+        const effect = opening.effect as KeyframeEffect;
+        const target = effect.target as Element;
+        // the spine on the cover rolls up through the beat the shut book rests, not as it lands
+        const keyframes = target.classList.contains('strip')
+          ? STRIP_CLOSING
+          : mirror(effect.getKeyframes());
+        if (target.classList.contains('book')) keyframes[keyframes.length - 1].transform = onShelf;
+
+        const { duration, progress } = effect.getComputedTiming();
+        const length = Number(duration) / CLOSE_RATE;
+        const backwards = target.animate(keyframes, { duration: length, fill: 'both' });
+        // shut partway through opening, it heads back from where it got to
+        backwards.currentTime = (1 - (progress ?? 1)) * length;
+        opening.cancel();
+        return backwards;
+      });
+    await Promise.allSettled(closings.map((animation) => animation.finished));
     onClose();
+  }
+
+  /** done opening, so a new cover shape no longer moves anything in flight */
+  let landed = false;
+  /** a cover shape that arrived while the book was still flying */
+  let lateRatio: number | undefined;
+
+  /** Gives the open book a cover's shape, skipping the sweeps that only play while it opens. */
+  async function reshape(ratio: number) {
+    coverRatio = ratio;
+    await tick();
+    for (const animation of dialog.getAnimations({ subtree: true })) {
+      if (animation instanceof CSSAnimation) animation.finish();
+    }
+  }
+
+  function onCoverLoad(event: Event) {
+    const { naturalWidth, naturalHeight } = event.currentTarget as HTMLImageElement;
+    const ratio = naturalWidth / naturalHeight;
+    if (ratio === coverRatio || closing) return;
+    if (landed) reshape(ratio);
+    else lateRatio = ratio;
   }
 
   function show(node: HTMLDialogElement) {
     dialog = node;
-    origin = measure();
-    node.showModal();
+    let gone = false;
+    // a cover arriving mid-flight would reshape the board under the moving book, so it gets a
+    // moment to load first; one later than that takes its shape once the book has landed
+    const shown = untrack(() => cover);
+    const ready = shown
+      ? Promise.race([preloadCover(shown), new Promise((done) => setTimeout(done, COVER_WAIT))])
+      : Promise.resolve();
+    ready.then(async () => {
+      if (gone) return;
+      coverRatio = coverShape(shown) ?? undefined;
+      origin = measure();
+      node.showModal();
+
+      await Promise.allSettled(node.getAnimations({ subtree: true }).map((a) => a.finished));
+      landed = true;
+      if (lateRatio && !closing && !gone) reshape(lateRatio);
+    });
 
     // the page stays put behind the open book; the gutter keeps the shelves from shifting
     const root = document.documentElement;
@@ -157,6 +243,7 @@
     root.style.overflow = 'hidden';
     root.style.scrollbarGutter = 'stable';
     return () => {
+      gone = true;
       root.style.overflow = overflow;
       root.style.scrollbarGutter = scrollbarGutter;
     };
@@ -190,7 +277,9 @@
 
   /** a cover that failed to load, so the cloth one shows instead */
   let brokenCover = $state<string>();
-  const cover = $derived(book.coverUrl !== brokenCover ? book.coverUrl : undefined);
+  const cover = $derived(
+    book.coverUrl !== brokenCover && coverShape(book.coverUrl) !== null ? book.coverUrl : undefined
+  );
   /** the cover picture's width over its height, which the front board takes once it loads */
   let coverRatio = $state<number>();
   let brokenSpine = $state<string>();
@@ -566,10 +655,7 @@
             <img
               src={cover}
               alt=""
-              onload={(event) => {
-                const { naturalWidth, naturalHeight } = event.currentTarget as HTMLImageElement;
-                coverRatio = naturalWidth / naturalHeight;
-              }}
+              onload={onCoverLoad}
               onerror={() => (brokenCover = cover)}
             />
           {:else}

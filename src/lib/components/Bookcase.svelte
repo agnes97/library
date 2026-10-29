@@ -113,10 +113,10 @@
       } else if (!pile) {
         pile = [item];
         units.push(pile);
-        stacked = item.width;
-      } else if (stacked + PILE_GAP + item.width <= PILE_HEIGHT) {
+        stacked = item.bulk;
+      } else if (stacked + PILE_GAP + item.bulk <= PILE_HEIGHT) {
         pile.push(item);
-        stacked += PILE_GAP + item.width;
+        stacked += PILE_GAP + item.bulk;
       } else {
         // the pile is full: stand before it, after the others standing there
         units.splice(units.length - 1, 0, item);

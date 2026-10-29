@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { preloadCover } from '../covers';
   import type { Book } from '../types';
 
   type Props = {
@@ -18,6 +19,11 @@
   /** a spine photo that failed to load, so the cloth one shows instead */
   let brokenPhoto = $state<string>();
   const photo = $derived(book.spineUrl !== brokenPhoto ? book.spineUrl : undefined);
+
+  /** reaching for the book starts fetching its cover, so it is there by the time the book opens */
+  function reach() {
+    if (book.coverUrl) preloadCover(book.coverUrl);
+  }
 </script>
 
 <button
@@ -32,6 +38,9 @@
   style:--book-accent={book.colors.accent}
   style:--ink={book.colors.ink}
   style:--ink-shadow={book.colors.shadow}
+  onpointerenter={reach}
+  onpointerdown={reach}
+  onfocus={reach}
   onclick={(event) => onSelect(event.currentTarget)}
 >
   {#if photo}

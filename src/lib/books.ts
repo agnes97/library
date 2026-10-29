@@ -163,6 +163,9 @@ function toShelfBook({ id, read, book, readBy, addedBy }: ApiReading, lying: boo
   const seed = hash(book.id);
   const height = HEIGHTS[(hash(book.series ?? book.id) >>> 12) % HEIGHTS.length];
   const dye = book.spineColor ?? book.coverColor;
+  const bulk = lying
+    ? thickness(book.pages, SERIES_RANGE, SERIES_WIDTHS[(seed >>> 4) % SERIES_WIDTHS.length])
+    : thickness(book.pages, SPINE_RANGE, WIDTHS[(seed >>> 4) % WIDTHS.length]);
   return {
     key: id,
     book: {
@@ -183,9 +186,8 @@ function toShelfBook({ id, read, book, readBy, addedBy }: ApiReading, lying: boo
     // the volumes of a series share their size, give or take their thickness
     width: book.spineRatio
       ? Math.round(Math.min(Math.max(height * book.spineRatio, PHOTO_WIDTHS[0]), PHOTO_WIDTHS[1]))
-      : lying
-        ? thickness(book.pages, SERIES_RANGE, SERIES_WIDTHS[(seed >>> 4) % SERIES_WIDTHS.length])
-        : thickness(book.pages, SPINE_RANGE, WIDTHS[(seed >>> 4) % WIDTHS.length]),
+      : bulk,
+    bulk,
     height,
     lying,
     read,

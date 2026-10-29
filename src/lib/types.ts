@@ -55,6 +55,8 @@ export type ShelfBook = {
   book: Book;
   /** spine width in px */
   width: number;
+  /** how much room it takes in a pile, as thick as its pages make it whatever its photo shows */
+  bulk: number;
   /** a volume of a series that lies flat in piles instead of standing */
   lying: boolean;
   /** spine height in px */
