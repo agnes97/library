@@ -237,7 +237,53 @@ function sample(
 }
 
 /** What the shelves hold for visitors who are not logged in, newest read first. */
-export const sampleReadings: ShelfBook[] = shelve([
+export const sampleReadings: ApiReading[] = [
+  sample('OL45870364W', '2026-10-09', {
+    title: 'Threshing Day',
+    authors: ['Rebecca Yarros'],
+    year: 2026,
+    pages: 254,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL45870364W-a38d008a9330.webp',
+    coverColor: '#cecfd1',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL45870364W-8a9315647194.webp',
+    spineColor: '#928d8f',
+    spineRatio: 0.09,
+    description:
+      'The next book in the blockbuster Empyrean series, *Threshing Day* contains thirteen stories starring your favorite characters and their dragons. The deluxe first edition includes sixteen beautiful original full-color illustrations by artist Joe Requeza. This breathtaking collectible is available only in the US and Canada while supplies last.',
+    series: 'The Empyrean',
+  }),
+  sample('OL482454W', '2024-11-03', {
+    title: 'Cloud Atlas',
+    authors: ['David Mitchell'],
+    year: 2004,
+    pages: 537,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL482454W-93359023af46.webp',
+    coverColor: '#8c0251',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL482454W-1f63bfd793e3.webp',
+    spineColor: '#844e59',
+    spineRatio: 0.145,
+    description:
+      'Six lives nested inside one another like Russian dolls, from a notary crossing the Pacific in 1850 to a goatherd in a far, fallen future, each one reading the story before it.',
+  }),
+  sample('OL503424W', '2023', {
+    title: 'Quo Vadis',
+    authors: ['Henryk Sienkiewicz'],
+    year: 1895,
+    pages: 477,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL30514149W-3f1d98777bfa.webp',
+    coverColor: '#6c6a2b',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL30514149W-707d2da7b3f2.webp',
+    spineColor: '#524c1a',
+    spineRatio: 0.184,
+    description:
+      'Rome under Nero: the patrician Marcus Vinicius falls for Lygia, a Christian hostage, as the city burns and the persecution of her faith begins.',
+  }),
   sample('OL24468510W', '2025-09-12', {
     title: 'Frieren: Beyond Journey’s End, Vol. 1',
     authors: ['Kanehito Yamada', 'Tsukasa Abe'],
@@ -245,18 +291,110 @@ export const sampleReadings: ShelfBook[] = shelve([
     pages: 192,
     coverUrl: 'https://covers.openlibrary.org/b/id/11075074-L.jpg',
     coverColor: null,
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL24468510W-07a2793d0eb3.webp',
+    spineColor: '#d1d0cd',
+    spineRatio: 0.08,
     description:
       'The demon king is dead and the hero’s party goes home. For the elf mage Frieren, who will outlive them all by centuries, the journey that really matters is only beginning.',
   }),
-  sample('OL482454W', '2024-11-03', {
-    title: 'Cloud Atlas',
-    authors: ['David Mitchell'],
-    year: 2004,
-    pages: 537,
-    coverUrl: 'https://covers.openlibrary.org/b/id/6714077-L.jpg',
-    coverColor: null,
+  sample('OL17352669W', '2025', {
+    title: 'A Court of Thorns and Roses',
+    authors: ['Sarah J. Maas'],
+    year: 2013,
+    pages: 454,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL17352669W-fd86ed1158e6.webp',
+    coverColor: '#ed394d',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL17352669W-3b1745090a81.webp',
+    spineColor: '#cb323c',
+    spineRatio: 0.136,
     description:
-      'Six lives nested inside one another like Russian dolls, from a notary crossing the Pacific in 1850 to a goatherd in a far, fallen future, each one reading the story before it.',
+      "When nineteen-year-old huntress Feyre kills a wolf in the woods, a terrifying creature arrives to demand retribution. Dragged to a treacherous magical land she knows about only from legends, Feyre discovers that her captor is not truly a beast, but one of the lethal, immortal faeries who once ruled her world.\r\n\r\nAt least, he's not a beast all the time.\r\n\r\nAs she adapts to her new home, her feelings for the faerie, Tamlin, transform from icy hostility into a fiery passion that burns through every lie she's been told about the beautiful, dangerous world of the Fae. But something is not right in the faerie lands. An ancient, wicked shadow is growing, and Feyre must find a way to stop it, or doom Tamlin-and his world-forever.",
+    series: 'ACOTAR',
+  }),
+  sample('OL17837119W', '2022-04-18', {
+    title: '12 Rules for Life',
+    authors: ['Jordan B. Peterson'],
+    year: 2018,
+    pages: 480,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL17837119W-289a255723ea.webp',
+    coverColor: '#fafafa',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL17837119W-7eacbfbe7946.webp',
+    spineColor: '#e9e7e3',
+    spineRatio: 0.089,
+    description:
+      'An antidote to chaos in twelve rules, from standing up straight with your shoulders back to petting a cat when you meet one on the street.',
+  }),
+  sample('OL82560W', '2021-07-02', {
+    title: 'Harry Potter and the Goblet of Fire',
+    authors: ['J. K. Rowling'],
+    year: 2000,
+    pages: 672,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL82560W-c0f27a5f3c35.webp',
+    coverColor: '#6d2f54',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL82560W-3bba23cf7d7e.webp',
+    spineColor: '#6f5492',
+    spineRatio: 0.223,
+    description:
+      'The Goblet of Fire names a fourth champion for the Triwizard Tournament, though Harry is too young to enter and never put his name in.',
+    series: 'Harry Potter',
+    seriesNumber: 4,
+  }),
+  sample('OL82536W', '2021-05-15', {
+    title: 'Harry Potter and the Prisoner of Azkaban',
+    authors: ['J. K. Rowling'],
+    year: 1999,
+    pages: 416,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL82536W-6c135ed1ad39.webp',
+    coverColor: '#31566e',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL82536W-eee425705d39.webp',
+    spineColor: '#4b6a90',
+    spineRatio: 0.197,
+    description: 'Sirius Black has escaped from Azkaban, and everyone says he is coming for Harry.',
+    series: 'Harry Potter',
+    seriesNumber: 3,
+  }),
+  sample('OL82537W', '2021-03-08', {
+    title: 'Harry Potter and the Chamber of Secrets',
+    authors: ['J. K. Rowling'],
+    year: 1998,
+    pages: 339,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL82537W-3f5ab9b196ac.webp',
+    coverColor: '#2b4b76',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL82537W-d007758efbf8.webp',
+    spineColor: '#6f996b',
+    spineRatio: 0.18,
+    description:
+      'Students are being found turned to stone, and a voice in the walls only Harry can hear speaks of the Chamber of Secrets, opened once again.',
+    series: 'Harry Potter',
+    seriesNumber: 2,
+  }),
+  sample('OL82563W', '2021-01-10', {
+    title: 'Harry Potter and the Philosopher’s Stone',
+    authors: ['J. K. Rowling'],
+    year: 1997,
+    pages: 302,
+    coverUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL82563W-6d1c322e9265.webp',
+    coverColor: '#c6161d',
+    spineUrl:
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL82563W-95a7e70d8348.webp',
+    spineColor: '#e75157',
+    spineRatio: 0.156,
+    description:
+      'On his eleventh birthday, Harry Potter learns that he is a wizard, and leaves the cupboard under the stairs for Hogwarts School of Witchcraft and Wizardry.',
+    series: 'Harry Potter',
+    seriesNumber: 1,
   }),
   // the reader photographed every spine of this one
   sample('OL7924103W', '2024', {
@@ -496,107 +634,4 @@ export const sampleReadings: ShelfBook[] = shelve([
     series: 'Wheel of Time',
     seriesNumber: 14,
   }),
-  sample('OL503424W', '2023', {
-    title: 'Quo Vadis',
-    authors: ['Henryk Sienkiewicz'],
-    year: 1895,
-    pages: 477,
-    coverUrl: 'https://covers.openlibrary.org/b/id/833096-L.jpg',
-    coverColor: null,
-    description:
-      'Rome under Nero: the patrician Marcus Vinicius falls for Lygia, a Christian hostage, as the city burns and the persecution of her faith begins.',
-  }),
-  sample('OL17837119W', '2022-04-18', {
-    title: '12 Rules for Life',
-    authors: ['Jordan B. Peterson'],
-    year: 2018,
-    pages: 480,
-    coverUrl: 'https://covers.openlibrary.org/b/id/8131760-L.jpg',
-    coverColor: null,
-    description:
-      'An antidote to chaos in twelve rules, from standing up straight with your shoulders back to petting a cat when you meet one on the street.',
-  }),
-  sample('OL82586W', '2021-12-24', {
-    title: 'Harry Potter and the Deathly Hallows',
-    authors: ['J. K. Rowling'],
-    year: 2007,
-    pages: 701,
-    coverUrl: 'https://covers.openlibrary.org/b/id/15158660-L.jpg',
-    coverColor: null,
-    description:
-      'Dumbledore is gone, and Harry, Ron and Hermione leave Hogwarts behind to hunt down the Horcruxes that keep Voldemort alive.',
-    series: 'Harry Potter',
-    seriesNumber: 7,
-  }),
-  sample('OL82565W', '2021-11-06', {
-    title: 'Harry Potter and the Half-Blood Prince',
-    authors: ['J. K. Rowling'],
-    year: 2005,
-    pages: 640,
-    coverUrl: 'https://covers.openlibrary.org/b/id/10716273-L.jpg',
-    coverColor: null,
-    description:
-      'Dumbledore shows Harry the memories of the boy Tom Riddle once was, while an old potions book signed by the Half-Blood Prince makes him the best in his class.',
-    series: 'Harry Potter',
-    seriesNumber: 6,
-  }),
-  sample('OL82548W', '2021-09-19', {
-    title: 'Harry Potter and the Order of the Phoenix',
-    authors: ['J. K. Rowling'],
-    year: 2003,
-    pages: 870,
-    coverUrl: 'https://covers.openlibrary.org/b/id/15158666-L.jpg',
-    coverColor: null,
-    description:
-      'No one believes Voldemort is back, the Ministry sends Dolores Umbridge to Hogwarts, and Harry starts teaching his friends to defend themselves in secret.',
-    series: 'Harry Potter',
-    seriesNumber: 5,
-  }),
-  sample('OL82560W', '2021-07-02', {
-    title: 'Harry Potter and the Goblet of Fire',
-    authors: ['J. K. Rowling'],
-    year: 2000,
-    pages: 672,
-    coverUrl: 'https://covers.openlibrary.org/b/id/12059372-L.jpg',
-    coverColor: null,
-    description:
-      'The Goblet of Fire names a fourth champion for the Triwizard Tournament, though Harry is too young to enter and never put his name in.',
-    series: 'Harry Potter',
-    seriesNumber: 4,
-  }),
-  sample('OL82536W', '2021-05-15', {
-    title: 'Harry Potter and the Prisoner of Azkaban',
-    authors: ['J. K. Rowling'],
-    year: 1999,
-    pages: 416,
-    coverUrl: 'https://covers.openlibrary.org/b/id/10580435-L.jpg',
-    coverColor: null,
-    description: 'Sirius Black has escaped from Azkaban, and everyone says he is coming for Harry.',
-    series: 'Harry Potter',
-    seriesNumber: 3,
-  }),
-  sample('OL82537W', '2021-03-08', {
-    title: 'Harry Potter and the Chamber of Secrets',
-    authors: ['J. K. Rowling'],
-    year: 1998,
-    pages: 339,
-    coverUrl: 'https://covers.openlibrary.org/b/id/15158664-L.jpg',
-    coverColor: null,
-    description:
-      'Students are being found turned to stone, and a voice in the walls only Harry can hear speaks of the Chamber of Secrets, opened once again.',
-    series: 'Harry Potter',
-    seriesNumber: 2,
-  }),
-  sample('OL82563W', '2021-01-10', {
-    title: 'Harry Potter and the Philosopher’s Stone',
-    authors: ['J. K. Rowling'],
-    year: 1997,
-    pages: 302,
-    coverUrl: 'https://covers.openlibrary.org/b/id/15155833-L.jpg',
-    coverColor: null,
-    description:
-      'On his eleventh birthday, Harry Potter learns that he is a wizard, and leaves the cupboard under the stairs for Hogwarts School of Witchcraft and Wizardry.',
-    series: 'Harry Potter',
-    seriesNumber: 1,
-  }),
-]);
+];

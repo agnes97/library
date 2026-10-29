@@ -3,6 +3,7 @@
   import { cubicOut } from 'svelte/easing';
   import { slide } from 'svelte/transition';
   import { auth } from '../auth.svelte';
+  import { library } from '../library.svelte';
   import { theme, themes } from '../theme.svelte';
 
   type Props = {
@@ -92,6 +93,11 @@
   function login() {
     hide(false);
     onLoginClick();
+  }
+
+  function toggleSamples() {
+    hide();
+    library.showingSamples = !library.showingSamples;
   }
 
   function logout() {
@@ -233,6 +239,24 @@
       {/if}
 
       {#if user}
+        <button type="button" class="item action" role="menuitem" onclick={toggleSamples}>
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M5 4h4v16H5z" />
+            <path d="M10 4h4v16h-4z" />
+            <path d="M15.5 4.5l3.5-.9 3 15.5-3.5.9z" />
+          </svg>
+          {library.showingSamples ? 'Back to my shelves' : 'Guests’ sample shelves'}
+        </button>
         <button type="button" class="item action" role="menuitem" onclick={logout}>
           <svg
             width="18"

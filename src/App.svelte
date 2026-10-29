@@ -1,6 +1,6 @@
 <script lang="ts">
   import { auth } from './lib/auth.svelte';
-  import { sampleReadings, shelfDecor } from './lib/books';
+  import { shelfDecor } from './lib/books';
   import { library } from './lib/library.svelte';
   import type { ShelfBook } from './lib/types';
   import AddBookForm from './lib/components/AddBookForm.svelte';
@@ -13,9 +13,12 @@
 
   let isLoginOpen = $state(false);
   let isAddOpen = $state(false);
-  /** visitors not logged in see a few sample books; nothing shows while the login is checked */
-  const sampling = $derived(auth.status === 'unauthenticated');
-  const readings = $derived(sampling ? sampleReadings : library.readings);
+  /**
+   * visitors not logged in see a few sample books, as do readers who ask for them; nothing shows
+   * while the login is checked
+   */
+  const sampling = $derived(auth.status === 'unauthenticated' || library.showingSamples);
+  const readings = $derived(sampling ? library.samples : library.readings);
   let selected = $state.raw<{ reading: ShelfBook; spine: HTMLElement } | null>(null);
   /**
    * the open book as it is now on the shelves, so a correction shows at once; one just removed
@@ -63,7 +66,7 @@
         tags={!sampling}
         {shelfDecor}
         onSelect={select}
-        onAdd={auth.isAuthenticated ? () => (isAddOpen = true) : undefined}
+        onAdd={auth.isAuthenticated && !sampling ? () => (isAddOpen = true) : undefined}
       />
     </main>
   </div>

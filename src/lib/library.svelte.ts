@@ -1,5 +1,5 @@
 import { request } from './api';
-import { shelve } from './books';
+import { sampleReadings, shelve } from './books';
 import type { ApiBook, ApiReading, BookEdit, NewReading, ShelfBook } from './types';
 
 /**
@@ -8,12 +8,29 @@ import type { ApiBook, ApiReading, BookEdit, NewReading, ShelfBook } from './typ
  */
 const rank = (read: string) => (read.length === 4 ? `${read}-00-00` : read);
 
+/** A title as it compares, whichever apostrophes and case it is written in. */
+const plain = (title: string) => title.replace(/[’‘`]/g, "'").toLowerCase().trim();
+
+/** What an upload to a sample takes from the book it went to. */
+const photos = ({ coverUrl, coverColor, spineUrl, spineColor, spineRatio }: ApiBook) => ({
+  coverUrl,
+  coverColor,
+  spineUrl,
+  spineColor,
+  spineRatio,
+});
+
 class Library {
   /** every book read, newest first, as the API returns it */
   #readings = $state.raw<ApiReading[]>([]);
   /** every book read, newest first, as it sits on the shelves */
   readings: ShelfBook[] = $derived(shelve(this.#readings));
   status = $state<'idle' | 'loading' | 'error'>('idle');
+  /** the samples visitors see, kept here so a cover or spine uploaded to one shows at once */
+  #samples = $state.raw<ApiReading[]>(sampleReadings);
+  samples: ShelfBook[] = $derived(shelve(this.#samples));
+  /** a reader looking at the samples instead of their own shelves, to photograph them */
+  showingSamples = $state(false);
 
   /** bumped on every load and clear, so a load that finishes late is dropped */
   #generation = 0;
@@ -53,16 +70,33 @@ class Library {
     return this.#readings.find((reading) => reading.book.id === id)?.book;
   }
 
+  /**
+   * The id prismify stores a book under: a sample's is the reader's own copy of it, which may be
+   * another Open Library work, found by its title or its place in the series; prismify only knows
+   * books someone has on a shelf.
+   */
+  #stored(id: string): string {
+    const sample = this.#samples.find((reading) => reading.book.id === id)?.book;
+    if (!sample || this.#readings.some((reading) => reading.book.id === id)) return id;
+
+    const own = this.#readings.find(
+      ({ book }) =>
+        plain(book.title) === plain(sample.title) ||
+        (sample.series !== null &&
+          book.series === sample.series &&
+          book.seriesNumber === sample.seriesNumber)
+    );
+    return own?.book.id ?? id;
+  }
+
   /** Corrects a book on every shelf it sits on. */
   async edit(id: string, edit: BookEdit) {
-    const book = await request<ApiBook>(`/library/books/${id}`, {
+    const book = await request<ApiBook>(`/library/books/${this.#stored(id)}`, {
       method: 'PATCH',
       body: JSON.stringify(edit),
     });
 
-    this.#readings = this.#readings.map((reading) =>
-      reading.book.id === id ? { ...reading, book } : reading
-    );
+    this.#replace(book, id);
   }
 
   /**
@@ -78,10 +112,11 @@ class Library {
       body.append('image', cover, 'cover.jpg');
     }
 
-    const book = await request<ApiBook>(`/library/books/${id}/cover`, { method: 'PUT', body });
-    this.#readings = this.#readings.map((reading) =>
-      reading.book.id === id ? { ...reading, book } : reading
-    );
+    const book = await request<ApiBook>(`/library/books/${this.#stored(id)}/cover`, {
+      method: 'PUT',
+      body,
+    });
+    this.#replace(book, id);
   }
 
   /**
@@ -96,10 +131,27 @@ class Library {
       init = { method: 'PUT', body };
     }
 
-    const book = await request<ApiBook>(`/library/books/${id}/spine`, init);
+    const book = await request<ApiBook>(`/library/books/${this.#stored(id)}/spine`, init);
+    this.#replace(book, id);
+  }
+
+  /**
+   * Puts a book as prismify returned it on every shelf it sits on, and its photos on the sample it
+   * was changed through, by that sample's `id`.
+   */
+  #replace(book: ApiBook, id: string) {
     this.#readings = this.#readings.map((reading) =>
-      reading.book.id === id ? { ...reading, book } : reading
+      reading.book.id === book.id ? { ...reading, book } : reading
     );
+    if (this.#samples.some((reading) => reading.book.id === id)) {
+      this.#samples = this.#samples.map((reading) =>
+        reading.book.id === id
+          ? { ...reading, book: { ...reading.book, ...photos(book) } }
+          : reading
+      );
+      // to be copied into the samples in books.ts
+      console.info('sample', id, photos(book));
+    }
   }
 
   /** Takes a reading off the shelves for good. */
@@ -112,6 +164,7 @@ class Library {
     this.#generation++;
     this.#readings = [];
     this.status = 'idle';
+    this.showingSamples = false;
   }
 }
 
