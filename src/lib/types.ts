@@ -119,8 +119,12 @@ export type Reader = {
 export type EditionCover = {
   /** the thumbnail; prismify fetches the large one */
   url: string;
-  /** its title, language and year, e.g. "Malý princ · cze · 1998" */
+  /** its title, language and year, e.g. "Malý princ · Czech · 1998" */
   label: string;
+  /** the language's name in English, e.g. "Czech", when Open Library knows it */
+  language?: string;
+  /** what else tells the editions apart, e.g. "1998 · Albatros · Hardcover" */
+  details: string;
 };
 
 /** a book as prismify stores it, shared by everyone who read it */

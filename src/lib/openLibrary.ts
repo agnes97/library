@@ -37,11 +37,57 @@ type Edition = {
   publish_date?: string;
   languages?: { key: string }[];
   covers?: number[];
+  publishers?: string[];
+  physical_format?: string;
 };
 
+/** MARC's bibliographic codes that differ from the ISO ones `Intl.DisplayNames` knows */
+const MARC_CODES: Record<string, string> = {
+  alb: 'sqi',
+  arm: 'hye',
+  baq: 'eus',
+  bur: 'mya',
+  chi: 'zho',
+  cze: 'ces',
+  dut: 'nld',
+  fre: 'fra',
+  geo: 'kat',
+  ger: 'deu',
+  gre: 'ell',
+  ice: 'isl',
+  mac: 'mkd',
+  mao: 'mri',
+  may: 'msa',
+  per: 'fas',
+  rum: 'ron',
+  scc: 'srp',
+  scr: 'hrv',
+  slo: 'slk',
+  tib: 'bod',
+  wel: 'cym',
+};
+
+const languageNames = new Intl.DisplayNames(['en'], { type: 'language', fallback: 'none' });
+
+/** "cze" → "Czech", or undefined for a code nobody can name */
+function languageName(code: string | undefined): string | undefined {
+  if (!code) return undefined;
+  try {
+    return languageNames.of(MARC_CODES[code] ?? code);
+  } catch {
+    return undefined;
+  }
+}
+
+/** English, then named languages alphabetically, then the editions nobody tagged */
+function languageRank({ language }: EditionCover): string {
+  return language === 'English' ? '0' : language ? `1${language}` : '2';
+}
+
 /**
- * One cover per edition of the work that has one, those titled like `title` first, so a book
- * renamed to its translation finds that edition's cover at the front.
+ * One cover per edition of the work that has one: English ones first, then the rest grouped by
+ * language, and within each the newest first, undated ones last. Of the same year, those titled
+ * like `title` go first, so a book renamed to its translation finds that edition's cover sooner.
  */
 export async function editionCovers(
   workId: string,
@@ -50,29 +96,41 @@ export async function editionCovers(
 ): Promise<EditionCover[]> {
   const params = new URLSearchParams({
     limit: '100',
-    fields: 'title,publish_date,languages,covers',
+    fields: 'title,publish_date,languages,covers,publishers,physical_format',
   });
   const response = await fetch(`${WORKS_URL}/${workId}/editions.json?${params}`, { signal });
   if (!response.ok) throw new Error(`Open Library editions failed (${response.status})`);
 
   const { entries }: { entries: Edition[] } = await response.json();
   const seen = new Set<number>();
-  const covers: (EditionCover & { matches: boolean })[] = [];
+  const covers: (EditionCover & { year: number; matches: boolean })[] = [];
   for (const edition of entries) {
     // -1 marks a cover that was taken down
     const id = edition.covers?.find((cover) => cover > 0);
     if (!id || seen.has(id)) continue;
     seen.add(id);
 
-    const language = edition.languages?.[0]?.key.replace('/languages/', '');
+    const language = languageName(edition.languages?.[0]?.key.replace('/languages/', ''));
+    const year = edition.publish_date?.match(/\d{4}/)?.[0];
+    const details = [year, edition.publishers?.[0], edition.physical_format]
+      .filter(Boolean)
+      .join(' · ');
     covers.push({
       url: `https://covers.openlibrary.org/b/id/${id}-M.jpg`,
-      label: [edition.title, language, edition.publish_date].filter(Boolean).join(' · '),
+      label: [edition.title, language, details].filter(Boolean).join(' · '),
+      language,
+      details,
+      year: Number(year ?? 0),
       matches: edition.title?.trim().toLowerCase() === title.trim().toLowerCase(),
     });
   }
 
   return covers
-    .toSorted((a, b) => Number(b.matches) - Number(a.matches))
-    .map(({ url, label }) => ({ url, label }));
+    .toSorted(
+      (a, b) =>
+        languageRank(a).localeCompare(languageRank(b)) ||
+        b.year - a.year ||
+        Number(b.matches) - Number(a.matches)
+    )
+    .map(({ url, label, language, details }) => ({ url, label, language, details }));
 }
