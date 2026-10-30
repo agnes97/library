@@ -37,6 +37,8 @@ export const SAMPLES_QUERY = ['shelves', 'samples'] as const;
 /** how often a spine search or drawing running at OpenAI is looked in on, and for how long at most */
 const FOLLOW_EVERY = 3000;
 const FOLLOW_FOR = 6 * 60 * 1000;
+/** how many turned-down photos a search is told to skip, as many as prismify takes */
+const MAX_SEEN = 40;
 
 /** Waits `ms`, or rejects as soon as `signal` aborts. */
 function wait(ms: number, signal?: AbortSignal): Promise<void> {
@@ -189,19 +191,27 @@ class Library {
     this.#replace(book, id);
   }
 
-  /** Has ChatGPT look for photos on the web that show the book's spine; nothing is saved. */
+  /**
+   * Has ChatGPT look for photos on the web that show the book's spine, other than those the reader
+   * already turned down (`seen`); nothing is saved.
+   */
   async findSpines(
     id: string,
+    seen: string[],
     signal?: AbortSignal,
     onProgress?: (progress: SpineProgress) => void
   ): Promise<SpineCandidate[]> {
     const stored = this.#stored(id);
     const started = await request<SpineJob>(`/library/books/${stored}/spine/candidates`, {
       method: 'POST',
+      body: JSON.stringify({ seen: seen.slice(-MAX_SEEN) }),
       signal,
     });
     const done = await this.#follow(stored, started, signal, onProgress);
-    return 'candidates' in done ? done.candidates : [];
+    // it may turn up a turned-down photo again all the same
+    return 'candidates' in done
+      ? done.candidates.filter((candidate) => !seen.includes(candidate.imageUrl))
+      : [];
   }
 
   /**

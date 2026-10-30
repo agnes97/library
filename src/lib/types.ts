@@ -212,4 +212,6 @@ export type SpineCandidate = {
   preview: string;
   /** what the photo shows, in a few words */
   note: string;
+  /** whether ChatGPT thinks it shows the spine well enough to draw it after */
+  showsSpine: boolean;
 };

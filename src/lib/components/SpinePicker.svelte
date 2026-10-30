@@ -29,10 +29,14 @@
   let crop = $state<Crop>(WHOLE);
   let saving = $state(false);
   let error = $state<string | null>(null);
-  /** photos of the spine ChatGPT found on the web, while the reader picks one */
+  /** photos of the spine ChatGPT found on the web, which the reader goes through one by one */
   let found = $state.raw<SpineCandidate[] | null>(null);
-  /** the found photo picked to draw the spine after, by its URL */
-  let chosen = $state<string | null>(null);
+  /** which of them is shown */
+  let shown = $state(0);
+  /** every photo shown and passed over, by its URL, for searching again to skip */
+  let seen: string[] = [];
+  const candidate = $derived(found?.[shown]);
+  const more = $derived(found !== null && shown < found.length - 1);
   /** the spine ChatGPT drew, shown until it is saved or let go */
   let drawn = $state.raw<{ blob: Blob; url: string; from: string | Blob } | null>(null);
   /** what ChatGPT is busy with, which can take a minute */
@@ -150,10 +154,11 @@
 
   async function find() {
     if (busy) return;
+    seen = [...seen, ...(found ?? []).map(({ imageUrl }) => imageUrl)];
     const signal = begin('finding');
     try {
-      found = await library.findSpines(book.id, signal, (job) => (progress = job));
-      chosen = found[0]?.imageUrl ?? null;
+      found = await library.findSpines(book.id, seen, signal, (job) => (progress = job));
+      shown = 0;
     } catch (failure) {
       if (signal.aborted) return;
       error = failed(failure, 'The search failed, try again');
@@ -162,6 +167,12 @@
     } finally {
       end();
     }
+  }
+
+  /** Passes over the photo shown for the next one found, or searches again after the last. */
+  function next() {
+    if (more) shown++;
+    else find();
   }
 
   /** Has ChatGPT draw the spine after a found photo, by its URL, or the reader's own. */
@@ -310,25 +321,25 @@
     <img class="drawn" src={drawn.url} alt="The drawn spine of {book.title}" />
     <p class="hint">Save it if it looks right, or let ChatGPT try again.</p>
   {:else if found}
-    <p class="title">Pick the photo of its spine</p>
-    {#if found.length > 0}
-      <div class="found" role="radiogroup" aria-label="Photos found on the web">
-        {#each found as candidate (candidate.imageUrl)}
-          <button
-            type="button"
-            class="candidate"
-            role="radio"
-            aria-checked={chosen === candidate.imageUrl}
-            disabled={busy}
-            onclick={() => (chosen = candidate.imageUrl)}
-          >
-            <img src={candidate.preview} alt="" />
-            <span>{candidate.note}</span>
-          </button>
-        {/each}
-      </div>
+    {#if candidate}
+      <p class="title">{candidate.showsSpine ? 'Is this its spine?' : 'Could this be its spine?'}</p>
+      <figure class="found">
+        <img src={candidate.preview} alt="A photo found on the web for {book.title}" />
+        <figcaption>{candidate.note}</figcaption>
+      </figure>
+      <p class="hint">
+        Photo {shown + 1} of {found.length}
+        {#if !candidate.showsSpine}
+          · ChatGPT doubts it shows the spine
+        {/if}
+        · <a href={candidate.pageUrl} target="_blank" rel="noopener noreferrer">where it was found</a>
+      </p>
     {:else}
-      <p class="hint">No photo showing its spine turned up. Photograph your own copy instead.</p>
+      <p class="title">No photo of its spine</p>
+      <p class="hint">
+        {found.length > 0 ? 'That was every photo it found.' : 'None turned up this time.'}
+        Let ChatGPT search again, or photograph your own copy.
+      </p>
     {/if}
   {:else if stage}
     <p class="title">Drag around the spine</p>
@@ -364,7 +375,11 @@
     {/if}
     <p class="hint">Photograph the real one, even on a full shelf, and crop it out.</p>
     {#if ai.connected('openai')}
-      <p class="hint">Or let ChatGPT find a photo of it on the web and draw it sharp and straight.</p>
+      <p class="hint">
+        {book.spineUrl
+          ? 'Or let ChatGPT redraw this one sharp and straight, to sit seamlessly beside the cover, or find another on the web.'
+          : 'Or let ChatGPT find a photo of it on the web and draw it sharp and straight.'}
+      </p>
     {:else}
       <p class="hint">Connect ChatGPT under AI Keys in the menu to have it find and draw the spine.</p>
     {/if}
@@ -394,14 +409,23 @@
       </button>
     {:else if found}
       <button type="button" disabled={busy} onclick={() => (found = null)}>Back</button>
-      {#if found.length > 0}
+      <button type="button" disabled={busy} onclick={next}>
+        {#if working === 'finding'}
+          Searching…
+        {:else if more}
+          Not it
+        {:else}
+          {candidate ? 'Not it, search again' : 'Search again'}
+        {/if}
+      </button>
+      {#if candidate}
         <button
           type="button"
           class="primary"
-          disabled={busy || !chosen}
-          onclick={() => chosen && draw(chosen)}
+          disabled={busy}
+          onclick={() => candidate && draw(candidate.imageUrl)}
         >
-          {working === 'drawing' ? 'Drawing…' : 'Draw spine'}
+          {working === 'drawing' ? 'Drawing…' : 'Use it'}
         </button>
       {/if}
     {:else if stage}
@@ -426,6 +450,11 @@
         <button type="button" disabled={busy} onclick={find}>
           {working === 'finding' ? 'Searching…' : 'Find with AI'}
         </button>
+        {#if book.spineUrl}
+          <button type="button" disabled={busy} onclick={() => book.spineUrl && draw(book.spineUrl)}>
+            {working === 'drawing' ? 'Drawing…' : 'Improve with AI'}
+          </button>
+        {/if}
       {/if}
       <button type="button" class="primary" disabled={busy} onclick={() => photoInput?.click()}>
         {book.spineUrl ? 'Another photo' : 'Upload a photo'}
@@ -496,54 +525,34 @@
     box-shadow: 0 6px 14px rgb(46 32 38 / 0.35);
   }
 
-  /* the found photos, scrolling when there are more than fit the page */
+  /* the found photo shown, as large as the page lets it */
   .found {
     flex: 1;
     min-height: 0;
     align-self: stretch;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-    align-content: start;
-    gap: 10px;
-    overflow-y: auto;
-    padding: 4px;
-  }
-
-  .candidate {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
-    padding: 6px;
-    border-radius: 4px;
-    background: rgb(107 74 88 / 0.06);
-    color: var(--paper-muted);
-    font-family: inherit;
-    font-weight: 400;
-    font-size: 12px;
-    letter-spacing: 0;
-    text-transform: none;
+    gap: 8px;
+    margin: 0;
+  }
+
+  .found img {
+    flex: 1;
+    min-height: 0;
+    max-width: 100%;
+    object-fit: contain;
+    box-shadow: 0 4px 10px rgb(46 32 38 / 0.3);
+  }
+
+  .found figcaption {
+    font-size: 14px;
+    color: var(--paper-title);
     text-align: center;
   }
 
-  .candidate img {
-    width: 100%;
-    height: 130px;
-    object-fit: contain;
-  }
-
-  .candidate span {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-  }
-
-  .candidate[aria-checked='true'] {
-    outline: 2px solid var(--paper-accent);
-    background: rgb(107 74 88 / 0.14);
-    color: var(--paper-title);
+  .hint a {
+    color: inherit;
   }
 
   .working {
