@@ -68,32 +68,39 @@
   form {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 1.25rem;
   }
 
+  /* underlined like the fields of the add-a-book form */
   label {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.125rem;
   }
 
   span {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
     color: var(--text-muted);
   }
 
   input {
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--bg);
+    padding: 0.125rem 0 0.375rem;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0;
+    background: none;
     color: var(--text);
     font: inherit;
+    font-size: 1.125rem;
+    transition: border-color 0.15s;
   }
 
   input:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
+    outline: none;
+    border-bottom-color: var(--accent);
+    box-shadow: 0 1px 0 var(--accent);
   }
 
   small,
@@ -107,6 +114,7 @@
   }
 
   button {
+    margin-top: 0.5rem;
     padding: 0.625rem;
     border: none;
     border-radius: 8px;
@@ -115,6 +123,11 @@
     font: inherit;
     font-weight: 600;
     cursor: pointer;
+  }
+
+  button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 
   button:disabled {

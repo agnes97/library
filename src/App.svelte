@@ -92,7 +92,7 @@
   <LoginForm onSuccess={() => (isLoginOpen = false)} />
 </Modal>
 
-<Modal bind:open={isAddOpen} title="Add a book you've read" width="640px">
+<Modal bind:open={isAddOpen} title="Add a book you've read">
   <!-- mounted only while open, so every visit starts with an empty search -->
   {#if isAddOpen}
     <AddBookForm onDone={() => (isAddOpen = false)} />
