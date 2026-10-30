@@ -10,6 +10,9 @@ import type {
   SpineJob,
 } from './types';
 
+/** a spine search or drawing as it last stood at OpenAI */
+export type SpineProgress = Extract<SpineJob, { status: 'working' }>;
+
 /**
  * Where a reading sorts on the shelves, newest read first; one with only a year follows the dated
  * ones of its year, among the others like it by when it was added.
@@ -187,13 +190,17 @@ class Library {
   }
 
   /** Has ChatGPT look for photos on the web that show the book's spine; nothing is saved. */
-  async findSpines(id: string, signal?: AbortSignal): Promise<SpineCandidate[]> {
+  async findSpines(
+    id: string,
+    signal?: AbortSignal,
+    onProgress?: (progress: SpineProgress) => void
+  ): Promise<SpineCandidate[]> {
     const stored = this.#stored(id);
     const started = await request<SpineJob>(`/library/books/${stored}/spine/candidates`, {
       method: 'POST',
       signal,
     });
-    const done = await this.#follow(stored, started, signal);
+    const done = await this.#follow(stored, started, signal, onProgress);
     return 'candidates' in done ? done.candidates : [];
   }
 
@@ -201,7 +208,12 @@ class Library {
    * Has ChatGPT draw the spine straight and sharp after a photo of it, one found on the web by its
    * URL or the reader's own; it is only shown until the reader saves it with `setSpine`.
    */
-  async drawSpine(id: string, photo: string | Blob, signal?: AbortSignal): Promise<Blob> {
+  async drawSpine(
+    id: string,
+    photo: string | Blob,
+    signal?: AbortSignal,
+    onProgress?: (progress: SpineProgress) => void
+  ): Promise<Blob> {
     let body: BodyInit;
     if (typeof photo === 'string') {
       body = JSON.stringify({ imageUrl: photo });
@@ -216,7 +228,7 @@ class Library {
       body,
       signal,
     });
-    const done = await this.#follow(stored, started, signal);
+    const done = await this.#follow(stored, started, signal, onProgress);
     if (!('image' in done)) throw new Error('ChatGPT didn’t draw a spine, try again');
 
     const { image } = done;
@@ -224,14 +236,19 @@ class Library {
     return new Blob([bytes], { type: 'image/png' });
   }
 
-  /** Looks in on a search or drawing for the stored book until it is done, or `signal` aborts. */
+  /**
+   * Looks in on a search or drawing for the stored book until it is done, or `signal` aborts,
+   * telling `onProgress` how it stands each time.
+   */
   async #follow(
     stored: string,
     job: SpineJob,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onProgress?: (progress: SpineProgress) => void
   ): Promise<Exclude<SpineJob, { status: 'working' }>> {
     const until = Date.now() + FOLLOW_FOR;
     while (job.status === 'working') {
+      onProgress?.(job);
       if (Date.now() > until) throw new Error('ChatGPT is taking too long, try again');
       await wait(FOLLOW_EVERY, signal);
       job = await request<SpineJob>(`/library/books/${stored}/spine/jobs/${job.job}`, { signal });

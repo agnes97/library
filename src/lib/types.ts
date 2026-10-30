@@ -189,7 +189,16 @@ export type AiKeys = Record<AiProvider, AiKey | null>;
  * than a request may: still working, by its job id, or what it came to
  */
 export type SpineJob =
-  | { status: 'working'; job: string }
+  | {
+      status: 'working';
+      job: string;
+      /** which step is running: searching the web, looking at the photos found, or drawing */
+      step?: 'search' | 'vetting' | 'drawing';
+      /** still waiting its turn at OpenAI */
+      queued?: boolean;
+      /** how many found photos are being looked at, while vetting */
+      photos?: number;
+    }
   | { status: 'done'; candidates: SpineCandidate[] }
   | { status: 'done'; image: string };
 

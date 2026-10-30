@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ai } from '../ai.svelte';
-  import { library } from '../library.svelte';
+  import { library, type SpineProgress } from '../library.svelte';
   import { cropPhoto, drawTurned, loadPhoto, WHOLE, type Crop } from '../photo';
   import type { Book, SpineCandidate } from '../types';
 
@@ -37,9 +37,16 @@
   let drawn = $state.raw<{ blob: Blob; url: string; from: string | Blob } | null>(null);
   /** what ChatGPT is busy with, which can take a minute */
   let working = $state<'finding' | 'drawing' | null>(null);
+  /** the step it is on, as OpenAI last told */
+  let progress = $state.raw<SpineProgress | null>(null);
+  /** when it started, and the clock ticking along beside it */
+  let startedAt = $state(0);
+  let now = $state(0);
   const busy = $derived(saving || working !== null);
   /** stops looking in on ChatGPT once the picker closes */
   const closing = new AbortController();
+  /** stops the search or drawing under way when the reader gives up on it */
+  let stopping: AbortController | null = null;
   let photoInput = $state<HTMLInputElement>();
   /** the room for the photo and the spine beside it */
   let roomWidth = $state(0);
@@ -75,6 +82,13 @@
 
   $effect(() => () => closing.abort());
 
+  // the elapsed time counts up while ChatGPT works
+  $effect(() => {
+    if (!working) return;
+    const timer = setInterval(() => (now = Date.now()), 1000);
+    return () => clearInterval(timer);
+  });
+
   // and so does the drawn spine
   $effect(() => {
     const current = drawn;
@@ -86,35 +100,83 @@
   const failed = (failure: unknown, fallback: string) =>
     failure instanceof Error ? failure.message : fallback;
 
+  /** What ChatGPT is doing, in words. */
+  const doing = $derived.by(() => {
+    if (!progress || progress.queued) return 'Waiting for ChatGPT to start';
+    switch (progress.step) {
+      case 'search':
+        return 'Searching the web for photos of its spine';
+      case 'vetting':
+        return progress.photos
+          ? `Looking through ${progress.photos} photos found for its spine`
+          : 'Looking through the photos found for its spine';
+      case 'drawing':
+        return 'Drawing the spine straight and sharp';
+      default:
+        return working === 'finding' ? 'Searching the web for its spine' : 'Drawing the spine';
+    }
+  });
+
+  /** which step of how many it is on, as a search looks at what it found after */
+  const stepOf = $derived(
+    working === 'finding' ? `Step ${progress?.step === 'vetting' ? 2 : 1} of 2 · ` : ''
+  );
+
+  const elapsed = $derived.by(() => {
+    const seconds = Math.max(0, Math.floor((now - startedAt) / 1000));
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  });
+
+  /** Starts ChatGPT working, returning the signal that stops it. */
+  function begin(what: 'finding' | 'drawing'): AbortSignal {
+    working = what;
+    progress = null;
+    error = null;
+    startedAt = now = Date.now();
+    stopping = new AbortController();
+    return AbortSignal.any([closing.signal, stopping.signal]);
+  }
+
+  function end() {
+    working = null;
+    progress = null;
+    stopping = null;
+  }
+
+  /** Lets go of the search or drawing; it may still finish at OpenAI, unseen. */
+  function stop() {
+    stopping?.abort();
+  }
+
   async function find() {
     if (busy) return;
-    working = 'finding';
-    error = null;
+    const signal = begin('finding');
     try {
-      found = await library.findSpines(book.id, closing.signal);
+      found = await library.findSpines(book.id, signal, (job) => (progress = job));
       chosen = found[0]?.imageUrl ?? null;
     } catch (failure) {
+      if (signal.aborted) return;
       error = failed(failure, 'The search failed, try again');
       // the key may have been let go on the server, which the menu should show
       ai.load();
     } finally {
-      working = null;
+      end();
     }
   }
 
   /** Has ChatGPT draw the spine after a found photo, by its URL, or the reader's own. */
   async function draw(from: string | Blob) {
     if (busy) return;
-    working = 'drawing';
-    error = null;
+    const signal = begin('drawing');
     try {
-      const blob = await library.drawSpine(book.id, from, closing.signal);
+      const blob = await library.drawSpine(book.id, from, signal, (job) => (progress = job));
       drawn = { blob, url: URL.createObjectURL(blob), from };
     } catch (failure) {
+      if (signal.aborted) return;
       error = failed(failure, 'Drawing failed, try again');
       ai.load();
     } finally {
-      working = null;
+      end();
     }
   }
 
@@ -309,12 +371,12 @@
   {/if}
 
   {#if working}
-    <p class="working" role="status">
+    <div class="working">
       <span class="spinner" aria-hidden="true"></span>
-      {working === 'finding'
-        ? 'ChatGPT is searching the web for its spine… this can take a minute'
-        : 'ChatGPT is drawing the spine… this can take a minute'}
-    </p>
+      <p role="status">{stepOf}{doing}…</p>
+      <span class="elapsed" aria-label="Time taken so far">{elapsed}</span>
+      <button type="button" class="stop" onclick={stop}>Stop</button>
+    </div>
   {/if}
 
   {#if error}
@@ -486,13 +548,29 @@
 
   .working {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: center;
     gap: 10px;
-    margin: 0;
     font-style: italic;
     font-size: 15px;
     color: var(--paper-muted);
     text-align: center;
+  }
+
+  .working p {
+    margin: 0;
+  }
+
+  /* the minutes and seconds keep their width as they count */
+  .elapsed {
+    font-style: normal;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+  }
+
+  .stop {
+    padding: 2px 8px;
   }
 
   .spinner {
