@@ -14,11 +14,15 @@
     onSelect: (reading: ShelfBook, spine: HTMLElement) => void;
     /** shows the add button on the top shelf; left out for visitors who can't add */
     onAdd?: () => void;
-    /** hang a year tag where each year's readings begin; off for the sample books */
-    tags?: boolean;
+    /** a tag with these words over the first book, hung instead of the year tags */
+    label?: string;
+    /** puts a back arrow on the label's tag */
+    onBack?: () => void;
+    /** the reader's own books, when showing others': the label hangs where their first tag would */
+    ownReadings?: ShelfBook[];
   };
 
-  let { readings, shelfDecor, onSelect, onAdd, tags = true }: Props = $props();
+  let { readings, shelfDecor, onSelect, onAdd, label, onBack, ownReadings }: Props = $props();
 
   const TORCHES_KEY = 'torches';
 
@@ -193,7 +197,12 @@
    * series moves down whole rather than break across shelves, when one shelf can hold it, and
    * the candle moves up or down a shelf when that is what keeps a series together.
    */
-  function layout(ordered: ShelfBook[], decor: ShelfOptions[], across: number): Shelf[] {
+  function layout(
+    ordered: ShelfBook[],
+    decor: ShelfOptions[],
+    across: number,
+    withAdd: boolean
+  ): Shelf[] {
     if (!across) return [];
     const inner = across - 2 * ROW_PADDING;
     const queue = fitSeries(gather(ordered), inner);
@@ -262,7 +271,7 @@
       const lean = options.lean ?? false;
       let candle = candleMoved || (options.candle ?? false);
       // the add button opens the top shelf, ahead of the newest book
-      const add = rows.length === 0 && Boolean(onAdd);
+      const add = rows.length === 0 && withAdd;
       const room = inner - (add ? ADD_WIDTH : 0);
 
       let filled = fill(start, candle ? room - CANDLE_WIDTH - GAP : room, lean);
@@ -293,21 +302,23 @@
     return rows.map((row, shelf): Shelf => {
       const { start: from, end, tipped, add, candleAt } = row;
       // the row centres its contents; find where each item starts to know where its tag fits
-      let offset = Math.max(0, (inner - contentOf(row)) / 2);
+      const begin = Math.max(0, (inner - contentOf(row)) / 2);
+      let offset = begin;
 
       const items = queue.slice(from, end).map((unit, i): ShelfBook | ShelfPile => {
         const j = from + i;
         if (j === candleAt) offset += CANDLE_WIDTH + GAP;
         const leans = tipped !== undefined && j === end - 1;
         if (leans) offset += tipped;
-        const first =
-          tags && (j === 0 || yearOf(firstOf(unit)) !== yearOf(firstOf(queue[j - 1])));
+        const first = label
+          ? j === 0
+          : j === 0 || yearOf(firstOf(unit)) !== yearOf(firstOf(queue[j - 1]));
         // the tag hangs from the left of the button and book together
         const tagAt = offset;
         if (add && i === 0) offset += ADD_WIDTH;
         offset += widthOf(unit) + GAP;
         const tag = {
-          tag: first ? yearOf(firstOf(unit)) : undefined,
+          tag: first ? (label ?? yearOf(firstOf(unit))) : undefined,
           tagFlip: first && tagAt + TAG_WIDTH > inner,
         };
         return Array.isArray(unit)
@@ -319,11 +330,22 @@
         key: `shelf-${shelf}`,
         items,
         candleAt: candleAt === null ? null : candleAt - from,
+        start: begin,
       };
     });
   }
 
-  const shelves = $derived(layout(readings, shelfDecor, rowWidth));
+  const shelves = $derived(layout(readings, shelfDecor, rowWidth, Boolean(onAdd)));
+
+  /**
+   * How far the label's tag moves from the first book, to where the year tag over the add button
+   * hangs on the reader's own shelves; none when they have no books to lay out.
+   */
+  const labelShift = $derived.by(() => {
+    if (!label || !ownReadings?.length || !shelves.length) return 0;
+    const [own] = layout(ownReadings, shelfDecor, rowWidth, true);
+    return own ? own.start - shelves[0].start : 0;
+  });
 
   /** the most time between two books set down on filling shelves, and the longest it all takes */
   const ARRIVE_STEP = 70;
@@ -511,11 +533,18 @@
                       {@render candle()}
                     {/if}
                     {#if item.tag}
+                      {@const opens = onAdd && shelf.key === 'shelf-0' && i === 0}
                       <!-- as tall as the row, so the tag hangs from the shelf above while the
                            book stands on the plank -->
                       <div class="tagged">
-                        <ShelfTag year={item.tag} flip={item.tagFlip} />
-                        {#if onAdd && shelf.key === 'shelf-0' && i === 0}
+                        <ShelfTag
+                          text={item.tag}
+                          flip={item.tagFlip}
+                          width={opens ? TAG_WIDTH : undefined}
+                          shift={label ? labelShift : 0}
+                          onBack={label ? onBack : undefined}
+                        />
+                        {#if opens}
                           <!-- as wide as the tag, so the tag hangs centred over the button -->
                           <div class="opener" style:width="{TAG_WIDTH}px">
                             <AddBookButton onclick={onAdd} />

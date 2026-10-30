@@ -20,6 +20,9 @@ const photos = ({ coverUrl, coverColor, spineUrl, spineColor, spineRatio }: ApiB
   spineRatio,
 });
 
+/** the query param that keeps a reader on the sample shelves through a reload: `?shelves=samples` */
+export const SAMPLES_QUERY = ['shelves', 'samples'] as const;
+
 /** how many more times a load tries when the connection drops, waiting 1, 2, 4… s between */
 const RETRIES = 4;
 
@@ -33,7 +36,9 @@ class Library {
   #samples = $state.raw<ApiReading[]>(sampleReadings);
   samples: ShelfBook[] = $derived(shelve(this.#samples));
   /** a reader looking at the samples instead of their own shelves, to photograph them */
-  showingSamples = $state(false);
+  showingSamples = $state(
+    new URLSearchParams(location.search).get(SAMPLES_QUERY[0]) === SAMPLES_QUERY[1]
+  );
 
   /** bumped on every load and clear, so a load that finishes late is dropped */
   #generation = 0;
@@ -182,7 +187,6 @@ class Library {
     this.#generation++;
     this.#readings = [];
     this.status = 'idle';
-    this.showingSamples = false;
   }
 }
 

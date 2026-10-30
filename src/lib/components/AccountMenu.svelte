@@ -102,6 +102,8 @@
 
   function logout() {
     hide();
+    // the next login comes back to the reader's own shelves
+    library.showingSamples = false;
     auth.logout();
   }
 </script>
@@ -255,7 +257,7 @@
             <path d="M10 4h4v16h-4z" />
             <path d="M15.5 4.5l3.5-.9 3 15.5-3.5.9z" />
           </svg>
-          {library.showingSamples ? 'Back to my shelves' : 'Guests’ sample shelves'}
+          {library.showingSamples ? 'Back to my shelves' : 'Sample shelves'}
         </button>
         <button type="button" class="item action" role="menuitem" onclick={logout}>
           <svg

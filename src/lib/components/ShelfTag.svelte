@@ -1,14 +1,25 @@
 <script lang="ts">
   type Props = {
-    year: number;
+    /** a year, or a label */
+    text: number | string;
     /** hang from the right edge of the book instead of its left */
     flip?: boolean;
+    /** at least this wide, its words centred, to line up with the add button under it */
+    width?: number;
+    /** moves it this many px right of where it would hang */
+    shift?: number;
+    /** puts a back arrow after the text */
+    onBack?: () => void;
   };
 
-  let { year, flip = false }: Props = $props();
+  let { text, flip = false, width, shift = 0, onBack }: Props = $props();
 </script>
 
-<div class={['tag', { flip }]}>
+<div
+  class={['tag', { flip }]}
+  style:min-width={width ? `${width}px` : undefined}
+  style:translate={shift ? `${shift}px` : undefined}
+>
   {#each ['left', 'right'] as side (side)}
     <span class="chain {side}" aria-hidden="true">
       <span class="ring"></span>
@@ -23,7 +34,25 @@
   <div class="frame">
     <div class="plate">
       <span class="rivet left" aria-hidden="true"></span>
-      {year}
+      {text}
+      {#if onBack}
+        <button type="button" class="back" aria-label="Back to my shelves" title="Back to my shelves" onclick={onBack}>
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M9 14 4 9l5-5" />
+            <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+          </svg>
+        </button>
+      {/if}
       <span class="rivet right" aria-hidden="true"></span>
     </div>
   </div>
@@ -111,6 +140,7 @@
   .plate {
     position: relative;
     padding: 10px 40px 10px 44px;
+    text-align: center;
     clip-path: polygon(
       6px 0,
       calc(100% - 6px) 0,
@@ -135,6 +165,38 @@
     text-shadow:
       0 1px 0 rgb(255 236 170 / 0.75),
       0 -1px 0 rgb(0 0 0 / 0.35);
+  }
+
+  .plate:has(.back) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding-right: 30px;
+  }
+
+  .back {
+    display: flex;
+    margin: -6px 0;
+    padding: 3px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    /* the tag lets clicks through to the books; its button doesn't */
+    pointer-events: auto;
+    filter: drop-shadow(0 1px 0 rgb(255 236 170 / 0.75));
+    transition: transform 0.15s ease;
+  }
+
+  .back:hover {
+    transform: translateX(-1px);
+  }
+
+  .back:focus-visible {
+    outline: 2px solid #2b1d06;
+    outline-offset: 1px;
   }
 
   .rivet {

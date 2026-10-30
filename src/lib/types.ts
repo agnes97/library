@@ -67,8 +67,8 @@ export type ShelfBook = {
   read: string;
   readBy: Reader;
   addedBy: Reader;
-  /** the year on the tag hanging over it, when it is the first book read that year */
-  tag?: number;
+  /** the year on the tag hanging over it, when it is the first book read that year, or the label */
+  tag?: number | string;
   /** hang the tag from the book's right edge, as there is no room for it on the right */
   tagFlip?: boolean;
 };
@@ -78,8 +78,8 @@ export type ShelfPile = {
   key: string;
   /** bottom one first */
   pile: ShelfBook[];
-  /** the year on the tag hanging over it, when it holds the first book read that year */
-  tag?: number;
+  /** the year on the tag hanging over it, when it holds the first book read that year, or the label */
+  tag?: number | string;
   /** hang the tag from the pile's right edge, as there is no room for it on the right */
   tagFlip?: boolean;
 };
@@ -96,6 +96,8 @@ export type Shelf = {
   items: (ShelfBook | ShelfPile)[];
   /** the item a lit candle stands before, or as many as there are when it stands after them all */
   candleAt: number | null;
+  /** how far in from the row's padding its contents begin, centred as they are */
+  start: number;
 };
 
 export type BookResult = {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { auth } from './lib/auth.svelte';
   import { shelfDecor } from './lib/books';
-  import { library } from './lib/library.svelte';
+  import { library, SAMPLES_QUERY } from './lib/library.svelte';
   import type { ShelfBook } from './lib/types';
   import AddBookForm from './lib/components/AddBookForm.svelte';
   import Backdrop from './lib/components/Backdrop.svelte';
@@ -33,6 +33,15 @@
   $effect(() => {
     if (auth.isAuthenticated) library.load();
     else library.clear();
+  });
+
+  // the address says when the samples are showing, so a reload keeps them
+  $effect(() => {
+    const url = new URL(location.href);
+    const [key, value] = SAMPLES_QUERY;
+    if (library.showingSamples) url.searchParams.set(key, value);
+    else url.searchParams.delete(key);
+    if (url.href !== location.href) history.replaceState(history.state, '', url);
   });
 
   /** a load lost to a dropped connection is tried again once the reader is back */
@@ -77,7 +86,9 @@
 
       <Bookcase
         {readings}
-        tags={!sampling}
+        label={sampling ? 'Sample shelves' : undefined}
+        onBack={auth.isAuthenticated && library.showingSamples ? () => (library.showingSamples = false) : undefined}
+        ownReadings={auth.isAuthenticated ? library.readings : undefined}
         {shelfDecor}
         onSelect={select}
         onAdd={auth.isAuthenticated && !sampling ? () => (isAddOpen = true) : undefined}
