@@ -39,3 +39,7 @@ Same flow as `agnes97-portfolio`, against the prismify API at `https://prismify.
 ### Style
 
 oxfmt: single quotes, semicolons, ES5 trailing commas. Validate `.svelte` files with `npx @sveltejs/mcp svelte-autofixer <file>`.
+
+### Git
+
+Keep `master` a straight line, with no merge commits: rebase a feature branch onto `master` (`git rebase master`) and then fast-forward it in (`git merge --ff-only <branch>`); never `git merge --no-ff` or a merge commit from a pull. The repo is set to `merge.ff only` and `pull.rebase true` locally, so a merge that can't fast-forward fails instead of creating one.
