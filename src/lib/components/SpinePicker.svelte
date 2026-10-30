@@ -1,15 +1,20 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { ai } from '../ai.svelte';
   import { library, type SpineProgress } from '../library.svelte';
   import { cropPhoto, drawTurned, loadPhoto, WHOLE, type Crop } from '../photo';
   import type { Book, SpineCandidate } from '../types';
+  import PageBar from './PageBar.svelte';
+  import Pill from './Pill.svelte';
 
   type Props = {
     book: Book;
+    /** what the reader chose: ChatGPT finding photos of it, redrawing the current one, or their own photo */
+    start: 'find' | 'improve' | File;
     onClose: () => void;
   };
 
-  let { book, onClose }: Props = $props();
+  let { book, start, onClose }: Props = $props();
 
   /** the photo shown for cropping is drawn no bigger than this */
   const STAGE_SIDE = 1000;
@@ -22,7 +27,7 @@
   /** between the photo and the spine beside it, as in the styles below */
   const GAP = 16;
 
-  /** the photo being cropped; none while only the current spine shows */
+  /** the photo being cropped */
   let photo = $state.raw<ImageBitmap | null>(null);
   /** quarter turns clockwise, for a photo of books lying down */
   let turns = $state(0);
@@ -57,7 +62,7 @@
   let roomHeight = $state(0);
 
   /** the photo as it shows, turned and small enough to draw on every drag */
-  const stage = $derived(photo && drawTurned(photo, turns, WHOLE, STAGE_SIDE));
+  const stage = $derived(photo ? drawTurned(photo, turns, WHOLE, STAGE_SIDE) : null);
   const previewHeight = $derived(Math.min(PREVIEW_HEIGHT, roomHeight));
   const previewWidth = $derived(
     stage
@@ -77,6 +82,18 @@
         )
       : 0
   );
+
+  const heading = $derived.by(() => {
+    if (drawn) return 'The spine ChatGPT drew';
+    if (found) {
+      if (!candidate) return 'No photo of its spine';
+      return candidate.showsSpine ? 'Is this its spine?' : 'Could this be its spine?';
+    }
+    if (stage) return 'Drag around the spine';
+    if (start === 'find') return 'Finding its spine';
+    if (start === 'improve') return 'Improving its spine';
+    return 'Photo of the spine';
+  });
 
   // the photo goes when it is replaced or the picker closes
   $effect(() => {
@@ -145,11 +162,20 @@
     working = null;
     progress = null;
     stopping = null;
+    // stopped before anything turned up, so there is nothing left here to show
+    if (!drawn && !found && !stage && !error && !closing.signal.aborted) onClose();
   }
 
   /** Lets go of the search or drawing; it may still finish at OpenAI, unseen. */
   function stop() {
     stopping?.abort();
+  }
+
+  /** Goes up a level: from the drawn spine to what it was drawn after, otherwise out. */
+  export function back() {
+    if (saving) return;
+    if (drawn && (found || stage)) drawn = null;
+    else onClose();
   }
 
   async function find() {
@@ -198,6 +224,13 @@
     } catch (failure) {
       error = failed(failure, 'That photo can’t be read');
     }
+  }
+
+  /** Does again what the reader chose, after it failed. */
+  function retry() {
+    if (start === 'find') find();
+    else if (start === 'improve' && book.spineUrl) draw(book.spineUrl);
+    else photoInput?.click();
   }
 
   /** Draws the cropped part as the spine will stand, again on every drag. */
@@ -297,15 +330,13 @@
     canvas.getContext('2d')?.drawImage(stage, 0, 0);
   }
 
-  async function save(spine: 'crop' | 'cloth' | 'drawn') {
+  async function save(spine: 'crop' | 'drawn') {
     if (busy) return;
     saving = true;
     error = null;
     try {
-      let image: Blob | null = null;
-      if (spine === 'drawn') image = drawn?.blob ?? null;
-      else if (spine === 'crop' && photo) image = await cropPhoto(photo, turns, crop);
-      await library.setSpine(book.id, image);
+      const image = spine === 'drawn' ? drawn?.blob : photo && (await cropPhoto(photo, turns, crop));
+      if (image) await library.setSpine(book.id, image);
       onClose();
     } catch (failure) {
       error = failed(failure, 'Saving failed, try again');
@@ -313,16 +344,22 @@
       saving = false;
     }
   }
+
+  untrack(() => {
+    if (start === 'find') find();
+    else if (start === 'improve') retry();
+    else open(start);
+  });
 </script>
 
 <div class="spine-picker" role="group" aria-label="Photo of the spine" aria-busy={working !== null}>
+  <PageBar title={heading} cancel={!!drawn || !!stage} disabled={saving} onBack={back} />
+
   {#if drawn}
-    <p class="title">The spine ChatGPT drew</p>
     <img class="drawn" src={drawn.url} alt="The drawn spine of {book.title}" />
     <p class="hint">Save it if it looks right, or let ChatGPT try again.</p>
   {:else if found}
     {#if candidate}
-      <p class="title">{candidate.showsSpine ? 'Is this its spine?' : 'Could this be its spine?'}</p>
       <figure class="found">
         <img src={candidate.preview} alt="A photo found on the web for {book.title}" />
         <figcaption>{candidate.note}</figcaption>
@@ -335,14 +372,12 @@
         · <a href={candidate.pageUrl} target="_blank" rel="noopener noreferrer">where it was found</a>
       </p>
     {:else}
-      <p class="title">No photo of its spine</p>
       <p class="hint">
         {found.length > 0 ? 'That was every photo it found.' : 'None turned up this time.'}
         Let ChatGPT search again, or photograph your own copy.
       </p>
     {/if}
   {:else if stage}
-    <p class="title">Drag around the spine</p>
     <div class="cropper" bind:clientWidth={roomWidth} bind:clientHeight={roomHeight}>
       <div
         class="stage"
@@ -366,101 +401,79 @@
         aria-label="The spine as it will stand on the shelf"
       ></canvas>
     </div>
-  {:else}
-    <p class="title">Photo of the spine</p>
-    {#if book.spineUrl}
-      <img class="current" src={book.spineUrl} alt="The spine of {book.title}" />
-    {:else}
-      <p class="hint">Its spine is cloth, dyed after the cover.</p>
+  {:else if start === 'improve' && book.spineUrl}
+    <img class="current" src={book.spineUrl} alt="The spine of {book.title}" />
+  {/if}
+
+  <div class="foot">
+    {#if working}
+      <div class="working">
+        <span class="spinner" aria-hidden="true"></span>
+        <p role="status">{stepOf}{doing}…</p>
+        <span class="elapsed" aria-label="Time taken so far">{elapsed}</span>
+        <button type="button" class="stop" onclick={stop}>Stop</button>
+      </div>
     {/if}
-    <p class="hint">Photograph the real one, even on a full shelf, and crop it out.</p>
-    {#if ai.connected('openai')}
-      <p class="hint">
-        {book.spineUrl
-          ? 'Or let ChatGPT redraw this one sharp and straight, to sit seamlessly beside the cover, or find another on the web.'
-          : 'Or let ChatGPT find a photo of it on the web and draw it sharp and straight.'}
-      </p>
-    {:else}
-      <p class="hint">Connect ChatGPT under AI Keys in the menu to have it find and draw the spine.</p>
+
+    {#if error}
+      <p class="error" role="alert">{error}</p>
     {/if}
-  {/if}
 
-  {#if working}
-    <div class="working">
-      <span class="spinner" aria-hidden="true"></span>
-      <p role="status">{stepOf}{doing}…</p>
-      <span class="elapsed" aria-label="Time taken so far">{elapsed}</span>
-      <button type="button" class="stop" onclick={stop}>Stop</button>
-    </div>
-  {/if}
-
-  {#if error}
-    <p class="error" role="alert">{error}</p>
-  {/if}
-
-  <span class="choices">
-    {#if drawn}
-      <button type="button" disabled={busy} onclick={() => (drawn = null)}>Back</button>
-      <button type="button" disabled={busy} onclick={() => drawn && draw(drawn.from)}>
-        {working === 'drawing' ? 'Drawing…' : 'Try again'}
-      </button>
-      <button type="button" class="primary" disabled={busy} onclick={() => save('drawn')}>
-        {saving ? 'Saving…' : 'Save'}
-      </button>
-    {:else if found}
-      <button type="button" disabled={busy} onclick={() => (found = null)}>Back</button>
-      <button type="button" disabled={busy} onclick={next}>
-        {#if working === 'finding'}
-          Searching…
-        {:else if more}
-          Not it
-        {:else}
-          {candidate ? 'Not it, search again' : 'Search again'}
+    <span class="choices">
+      {#if drawn}
+        <Pill disabled={busy} onclick={() => drawn && draw(drawn.from)}>
+          {working === 'drawing' ? 'Drawing…' : 'Try again'}
+        </Pill>
+        <Pill kind="primary" disabled={busy} onclick={() => save('drawn')}>
+          {saving ? 'Saving…' : 'Save'}
+        </Pill>
+      {:else if found}
+        <Pill disabled={busy} onclick={next}>
+          {#if working === 'finding'}
+            Searching…
+          {:else if more}
+            Not it
+          {:else}
+            {candidate ? 'Not it, search again' : 'Search again'}
+          {/if}
+        </Pill>
+        {#if candidate}
+          <Pill
+            kind="primary"
+            disabled={busy}
+            onclick={() => candidate && draw(candidate.imageUrl)}
+          >
+            {working === 'drawing' ? 'Drawing…' : 'Use it'}
+          </Pill>
         {/if}
-      </button>
-      {#if candidate}
-        <button
-          type="button"
-          class="primary"
+      {:else if stage}
+        <Pill
+          icon="turn"
+          aria-label="Turn the photo"
+          title="Turn the photo"
           disabled={busy}
-          onclick={() => candidate && draw(candidate.imageUrl)}
-        >
-          {working === 'drawing' ? 'Drawing…' : 'Use it'}
-        </button>
-      {/if}
-    {:else if stage}
-      <button type="button" disabled={busy} onclick={() => (photo = null)}>Back</button>
-      <button type="button" disabled={busy} onclick={turn}>Turn</button>
-      {#if ai.connected('openai')}
-        <button type="button" disabled={busy} onclick={drawCrop}>
-          {working === 'drawing' ? 'Drawing…' : 'Draw with AI'}
-        </button>
-      {/if}
-      <button type="button" class="primary" disabled={busy} onclick={() => save('crop')}>
-        {saving ? 'Saving…' : 'Save'}
-      </button>
-    {:else}
-      <button type="button" disabled={busy} onclick={onClose}>Cancel</button>
-      {#if book.spineUrl}
-        <button type="button" disabled={busy} onclick={() => save('cloth')}>
-          {saving ? 'Saving…' : 'Use cloth'}
-        </button>
-      {/if}
-      {#if ai.connected('openai')}
-        <button type="button" disabled={busy} onclick={find}>
-          {working === 'finding' ? 'Searching…' : 'Find with AI'}
-        </button>
-        {#if book.spineUrl}
-          <button type="button" disabled={busy} onclick={() => book.spineUrl && draw(book.spineUrl)}>
+          onclick={turn}
+        />
+        {#if ai.connected('openai')}
+          <Pill
+            icon="sparkle"
+            title="Have ChatGPT draw this crop sharp and straight"
+            disabled={busy}
+            onclick={drawCrop}
+          >
             {working === 'drawing' ? 'Drawing…' : 'Improve with AI'}
-          </button>
+          </Pill>
         {/if}
+        <Pill kind="primary" disabled={busy} onclick={() => save('crop')}>
+          {saving ? 'Saving…' : 'Save'}
+        </Pill>
+      {:else if error && !working}
+        <Pill disabled={busy} onclick={retry}>
+          {start instanceof File ? 'Choose another photo' : 'Try again'}
+        </Pill>
       {/if}
-      <button type="button" class="primary" disabled={busy} onclick={() => photoInput?.click()}>
-        {book.spineUrl ? 'Another photo' : 'Upload a photo'}
-      </button>
-    {/if}
-  </span>
+    </span>
+  </div>
   <input
     bind:this={photoInput}
     type="file"
@@ -475,7 +488,7 @@
 </div>
 
 <style>
-  /* laid over the first page, like the cover picker */
+  /* laid over the first page, like the cover and spine page */
   .spine-picker {
     position: absolute;
     inset: 0;
@@ -484,7 +497,7 @@
     flex-direction: column;
     align-items: center;
     gap: 14px;
-    padding: 36px 32px 18px;
+    padding: 20px 28px 18px 24px;
     background-color: inherit;
     background-image: inherit;
     border-radius: inherit;
@@ -493,15 +506,8 @@
   @media (width < 700px) {
     .spine-picker {
       gap: 10px;
-      padding: 20px 20px 12px;
+      padding: 14px 16px 12px;
     }
-  }
-
-  .title {
-    font-family: var(--serif);
-    font-weight: 700;
-    font-size: 24px;
-    color: var(--paper-title);
   }
 
   .hint {
@@ -580,6 +586,27 @@
 
   .stop {
     padding: 2px 8px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: var(--paper-muted);
+    font-family: var(--caps);
+    font-style: normal;
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  .stop:hover {
+    background: rgb(107 74 88 / 0.1);
+    color: var(--paper-title);
+  }
+
+  .stop:focus-visible {
+    outline: 2px solid var(--paper-accent);
+    outline-offset: 2px;
   }
 
   .spinner {
@@ -631,7 +658,7 @@
 
   .crop {
     position: absolute;
-    outline: 2px solid var(--paper-accent);
+    outline: 2px dashed var(--paper);
     box-shadow: 0 0 0 100vmax rgb(20 10 14 / 0.55);
     pointer-events: none;
   }
@@ -647,46 +674,19 @@
     font-size: 14px;
   }
 
+  /* along the foot of the page, whatever shows above */
+  .foot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: auto;
+  }
+
   .choices {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
     gap: 8px;
-  }
-
-  button {
-    padding: 6px 12px;
-    border: none;
-    border-radius: 4px;
-    background: none;
-    color: var(--paper-muted);
-    font-family: var(--caps);
-    font-weight: 600;
-    font-size: 12px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition:
-      background-color 0.15s,
-      color 0.15s;
-  }
-
-  button:hover {
-    background: rgb(107 74 88 / 0.1);
-    color: var(--paper-title);
-  }
-
-  .primary {
-    color: var(--paper-accent);
-  }
-
-  button:disabled {
-    opacity: 0.6;
-    cursor: wait;
-  }
-
-  button:focus-visible {
-    outline: 2px solid var(--paper-accent);
-    outline-offset: 2px;
   }
 </style>

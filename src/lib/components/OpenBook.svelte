@@ -1,15 +1,13 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte';
-  import { SvelteSet } from 'svelte/reactivity';
   import { innerHeight, innerWidth } from 'svelte/reactivity/window';
   import { auth } from '../auth.svelte';
   import { coverShape, preloadCover } from '../covers';
   import { library } from '../library.svelte';
-  import { editionCovers } from '../openLibrary';
-  import { shrinkPhoto } from '../photo';
-  import type { BookEdit, EditionCover, ShelfBook } from '../types';
+  import type { BookEdit, ShelfBook } from '../types';
   import BookCover3D from './BookCover3D.svelte';
-  import SpinePicker from './SpinePicker.svelte';
+  import LookEditor from './LookEditor.svelte';
+  import Pill from './Pill.svelte';
 
   type Props = {
     reading: ShelfBook;
@@ -286,86 +284,9 @@
   let brokenSpine = $state<string>();
   const spinePhoto = $derived(book.spineUrl !== brokenSpine ? book.spineUrl : undefined);
 
-  /** choosing another cover on the first page, in place of the 3D one */
-  let pickingCover = $state(false);
-  /** the editions' covers to choose from, once Open Library sends them */
-  let editions = $state.raw<EditionCover[] | null>(null);
-  let savingCover = $state(false);
-  let coverError = $state<string | null>(null);
-  let photoInput = $state<HTMLInputElement>();
-  let editionsRequest: AbortController | undefined;
-
-  /** how many covers download at once, ahead of the ones already shown */
-  const EDITIONS_AHEAD = 6;
-  /** how long the covers after a slow one wait for it before showing without it */
-  const EDITION_PATIENCE = 1500;
-  /** covers that loaded, failed or were given up on, by their place in `editions` */
-  const settledEditions = new Set<number>();
-  const loadedEditions = new SvelteSet<number>();
-  /** covers that failed to load, which drop out of the grid */
-  const brokenEditions = new SvelteSet<number>();
-  /** the covers before this one have all settled, so they show in reading order */
-  let editionsShown = $state(0);
-
-  function settleEdition(index: number, outcome: 'loaded' | 'broken' | 'late') {
-    settledEditions.add(index);
-    if (outcome === 'loaded') loadedEditions.add(index);
-    if (outcome === 'broken') brokenEditions.add(index);
-    let shown = editionsShown;
-    while (settledEditions.has(shown)) shown++;
-    editionsShown = shown;
-  }
-
-  // a cover that hangs is skipped, and shows on its own whenever it does arrive
-  $effect(() => {
-    if (!editions || editionsShown >= editions.length) return;
-    const waitingOn = editionsShown;
-    const timer = setTimeout(() => settleEdition(waitingOn, 'late'), EDITION_PATIENCE);
-    return () => clearTimeout(timer);
-  });
-
-  async function openPicker() {
-    if (closing) return;
-    pickingCover = true;
-    coverError = null;
-    editions = null;
-    settledEditions.clear();
-    loadedEditions.clear();
-    brokenEditions.clear();
-    editionsShown = 0;
-    editionsRequest = new AbortController();
-    try {
-      editions = await editionCovers(book.id, book.title, editionsRequest.signal);
-    } catch (error) {
-      if (editionsRequest.signal.aborted) return;
-      console.error(error);
-      editions = [];
-      coverError = 'Open Library can’t be reached, but you can still upload a photo';
-    }
-  }
-
-  function closePicker() {
-    if (savingCover) return;
-    editionsRequest?.abort();
-    pickingCover = false;
-  }
-
-  /** putting a photo of the real spine on the first page, in place of the 3D cover */
-  let pickingSpine = $state(false);
-
-  async function saveCover(source: string | File) {
-    if (savingCover) return;
-    savingCover = true;
-    coverError = null;
-    try {
-      await library.setCover(book.id, typeof source === 'string' ? source : await shrinkPhoto(source));
-      pickingCover = false;
-    } catch (error) {
-      coverError = error instanceof Error ? error.message : 'Saving failed, try again';
-    } finally {
-      savingCover = false;
-    }
-  }
+  /** changing the cover and the spine on the first page, in place of the 3D cover */
+  let editingLook = $state(false);
+  let lookEditor = $state<LookEditor>();
 
   /** asking whether to really take it off the shelf */
   let confirmingRemove = $state(false);
@@ -464,43 +385,16 @@
   }
 </script>
 
-{#snippet editionButton(edition: EditionCover, index: number, showLanguage: boolean)}
-  <button
-    type="button"
-    class={['edition', { current: edition.url === book.coverUrl }]}
-    title={edition.label}
-    disabled={savingCover}
-    hidden={brokenEditions.has(index)}
-    onclick={() => saveCover(edition.url)}
-  >
-    <span class="edition-frame">
-      <img
-        class={{ shown: index < editionsShown && loadedEditions.has(index) }}
-        src={index < editionsShown + EDITIONS_AHEAD ? edition.url : undefined}
-        alt={edition.label}
-        onload={() => settleEdition(index, 'loaded')}
-        onerror={() => settleEdition(index, 'broken')}
-      />
-    </span>
-    {#if showLanguage}
-      <span class="edition-language">{edition.language ?? 'Unknown language'}</span>
-    {/if}
-    {#if edition.details}
-      <span class="edition-details">{edition.details}</span>
-    {/if}
-  </button>
-{/snippet}
-
 <dialog
   {@attach show}
   class={[portrait ? 'portrait' : 'landscape', { closing, removed, narrowed: cover && coverRatio }]}
   aria-labelledby={titleId}
   oncancel={(event) => {
     event.preventDefault();
-    // Escape while correcting a detail or asking to remove it only drops that
+    // Escape while correcting a detail or asking to remove it only drops that, and while
+    // changing the cover or spine it goes up a level
     if (editing) stopEditing();
-    else if (pickingCover) closePicker();
-    else if (pickingSpine) pickingSpine = false;
+    else if (lookEditor) lookEditor.back();
     else if (confirmingRemove) confirmingRemove = false;
     else requestClose();
   }}
@@ -736,125 +630,44 @@
         {/if}
         <div class="face back">
           <div class="page page-1">
-            <div class="leaf">
+            <div class={['leaf', { asking: confirmingRemove }]}>
               <BookCover3D {book} height={layout.coverHeight} />
               <p class="hint">Drag the cover to turn it</p>
             </div>
-            {#if pickingCover}
-              <div class="picker" role="group" aria-label="Choose a cover">
-                <p class="picker-title">Choose a cover</p>
-                {#if editions === null}
-                  <p class="hint">Looking through the editions…</p>
-                {:else if editions.length}
-                  {@const english = editions.filter((edition) => edition.language === 'English')}
-                  {@const others = editions.filter((edition) => edition.language !== 'English')}
-                  <div class="editions">
-                    {#if english.length}
-                      {#if others.length}<p class="editions-heading">English</p>{/if}
-                      <div class="edition-grid">
-                        {#each english as edition, i (edition.url)}
-                          {@render editionButton(edition, i, false)}
-                        {/each}
-                      </div>
-                    {/if}
-                    {#if others.length}
-                      {#if english.length}<p class="editions-heading">Other languages</p>{/if}
-                      <div class="edition-grid">
-                        {#each others as edition, i (edition.url)}
-                          <!-- editions come sorted English first, so the others follow on -->
-                          {@render editionButton(edition, english.length + i, true)}
-                        {/each}
-                      </div>
-                    {/if}
-                  </div>
-                {:else if !coverError}
-                  <p class="hint">Open Library has no other covers for it</p>
-                {/if}
-                {#if coverError}
-                  <p class="edit-error" role="alert">{coverError}</p>
-                {/if}
-                <span class="remove-choices">
-                  <button
-                    type="button"
-                    class="remove-button"
-                    disabled={savingCover}
-                    onclick={closePicker}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    class="remove-button"
-                    disabled={savingCover}
-                    onclick={() => photoInput?.click()}
-                  >
-                    {savingCover ? 'Saving…' : 'Upload a photo'}
-                  </button>
-                </span>
-                <input
-                  bind:this={photoInput}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  hidden
-                  onchange={(event) => {
-                    const file = event.currentTarget.files?.[0];
-                    event.currentTarget.value = '';
-                    if (file) saveCover(file);
-                  }}
-                />
-              </div>
-            {/if}
-            {#if pickingSpine}
-              <SpinePicker {book} onClose={() => (pickingSpine = false)} />
+            {#if editingLook}
+              <LookEditor bind:this={lookEditor} {book} onClose={() => (editingLook = false)} />
             {/if}
             <div class="actions">
               {#if removeError}
                 <p class="edit-error" role="alert">{removeError}</p>
               {/if}
               {#if confirmingRemove}
-                <span class="remove-ask">Take it off your shelf?</span>
-                <span class="remove-choices">
-                  <button
-                    type="button"
-                    class="remove-button"
-                    disabled={removing}
-                    onclick={() => (confirmingRemove = false)}
-                  >
-                    Keep it
-                  </button>
-                  <button
-                    type="button"
-                    class="remove-button danger"
-                    disabled={removing}
-                    onclick={remove}
-                  >
+                <span class="remove-ask">Take {book.title} off your shelf?</span>
+                <span class="choices">
+                  <Pill disabled={removing} onclick={() => (confirmingRemove = false)}>Keep it</Pill>
+                  <Pill kind="danger" icon="bin" disabled={removing} onclick={remove}>
                     {removing ? 'Removing…' : 'Remove'}
-                  </button>
+                  </Pill>
                 </span>
               {:else}
-                <span class="remove-choices">
+                <span class="choices">
                   {#if canEdit}
-                    <button type="button" class="remove-button" onclick={openPicker}>
-                      Change cover
-                    </button>
-                    <button
-                      type="button"
-                      class="remove-button"
+                    <Pill
+                      icon="pencil"
                       onclick={() => {
-                        if (!closing) pickingSpine = true;
+                        if (!closing) editingLook = true;
                       }}
                     >
-                      Spine photo
-                    </button>
+                      Edit look
+                    </Pill>
                   {/if}
                   {#if canRemove}
-                    <button
-                      type="button"
-                      class="remove-button"
+                    <Pill
+                      icon="bin"
+                      aria-label="Remove from shelf"
+                      title="Remove from shelf"
                       onclick={() => (confirmingRemove = true)}
-                    >
-                      Remove from shelf
-                    </button>
+                    />
                   {/if}
                 </span>
               {/if}
@@ -1326,149 +1139,12 @@
     align-items: center;
     justify-content: center;
     gap: 24px;
+    transition: opacity 0.2s;
   }
 
-  /* laid over the first page, the 3D cover and the remove button */
-  .picker {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 14px;
-    padding: 36px 32px 18px;
-    background-color: inherit;
-    background-image: inherit;
-    border-radius: inherit;
-  }
-
-  .portrait .picker {
-    gap: 10px;
-    padding: 20px 20px 12px;
-  }
-
-  .picker-title {
-    font-family: var(--serif);
-    font-weight: 700;
-    font-size: 24px;
-    color: var(--paper-title);
-  }
-
-  /* a plain block, so the grids inside get a definite width to fill columns into */
-  .editions {
-    flex: 1;
-    align-self: stretch;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 4px;
-    scrollbar-width: thin;
-  }
-
-  .editions-heading {
-    margin: 0 0 10px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid rgb(107 74 88 / 0.25);
-    font-family: var(--caps);
-    font-size: 13px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--paper-muted);
-  }
-
-  .edition-grid + .editions-heading {
-    margin-top: 20px;
-  }
-
-  .edition-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-    align-items: start;
-    gap: 12px;
-  }
-
-  .edition {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-    padding: 0;
-    border: none;
-    background: none;
-    font: inherit;
-    text-align: left;
-    color: inherit;
-    cursor: pointer;
-  }
-
-  .edition[hidden] {
-    display: none;
-  }
-
-  /* the cover's place, tinted until its picture fades in */
-  .edition-frame {
-    display: block;
-    width: 100%;
-    aspect-ratio: 2 / 3;
-    margin-bottom: 4px;
-    overflow: hidden;
-    border-radius: 2px 4px 4px 2px;
-    background: rgb(107 74 88 / 0.15);
-    box-shadow: 0 4px 10px rgb(46 32 38 / 0.3);
-    transition:
-      transform 0.15s,
-      box-shadow 0.15s;
-  }
-
-  .edition img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    opacity: 0;
-    transition: opacity 0.3s;
-  }
-
-  .edition img.shown {
-    opacity: 1;
-  }
-
-  .edition:hover:not(:disabled) .edition-frame {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 16px rgb(46 32 38 / 0.35);
-  }
-
-  .edition.current .edition-frame,
-  .edition:focus-visible .edition-frame {
-    outline: 2px solid var(--paper-accent);
-    outline-offset: 2px;
-  }
-
-  .edition:focus-visible {
-    outline: none;
-  }
-
-  .edition:disabled {
-    cursor: wait;
-    opacity: 0.6;
-  }
-
-  .edition-language {
-    font-weight: 700;
-    font-size: 12px;
-    line-height: 1.2;
-    color: var(--paper-title);
-  }
-
-  .edition-details {
-    display: -webkit-box;
-    overflow: hidden;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
-    font-size: 11px;
-    line-height: 1.25;
-    color: var(--paper-muted);
+  /* the book steps back while it is asked whether to take it off the shelf */
+  .leaf.asking {
+    opacity: 0.55;
   }
 
   .hint {
@@ -1622,11 +1298,12 @@
     position: absolute;
     left: 0;
     right: 0;
-    bottom: 18px;
+    bottom: 20px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
+    padding: 0 16px;
     text-align: center;
   }
 
@@ -1637,54 +1314,14 @@
   .remove-ask {
     font-style: italic;
     font-size: 15px;
-    color: var(--paper-muted);
+    color: var(--paper-ink);
   }
 
-  .remove-choices {
+  .choices {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 8px;
-  }
-
-  .remove-button {
-    padding: 6px 12px;
-    border: none;
-    border-radius: 4px;
-    background: none;
-    color: var(--paper-muted);
-    font-family: var(--caps);
-    font-weight: 600;
-    font-size: 12px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    cursor: pointer;
-    transition:
-      background-color 0.15s,
-      color 0.15s;
-  }
-
-  .remove-button:hover {
-    background: rgb(107 74 88 / 0.1);
-    color: var(--paper-title);
-  }
-
-  .remove-button.danger {
-    color: #a3243b;
-  }
-
-  .remove-button.danger:hover {
-    background: rgb(163 36 59 / 0.1);
-  }
-
-  .remove-button:disabled {
-    opacity: 0.6;
-    cursor: wait;
-  }
-
-  .remove-button:focus-visible {
-    outline: 2px solid var(--paper-accent);
-    outline-offset: 2px;
+    gap: 10px;
   }
 
   /* gone from the shelf: the open book fades where it lies, and the room lights up again */

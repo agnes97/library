@@ -157,21 +157,19 @@ class Library {
 
   /**
    * Gives a book another cover on every shelf it sits on: an Open Library edition's, by its URL,
-   * or a photo of the reader's own copy.
+   * or a photo of the reader's own copy; or takes it off for plain cloth with the title on.
    */
-  async setCover(id: string, cover: string | Blob) {
-    let body: BodyInit;
+  async setCover(id: string, cover: string | Blob | null) {
+    let init: RequestInit = { method: 'DELETE' };
     if (typeof cover === 'string') {
-      body = JSON.stringify({ coverUrl: cover });
-    } else {
-      body = new FormData();
+      init = { method: 'PUT', body: JSON.stringify({ coverUrl: cover }) };
+    } else if (cover) {
+      const body = new FormData();
       body.append('image', cover, 'cover.jpg');
+      init = { method: 'PUT', body };
     }
 
-    const book = await request<ApiBook>(`/library/books/${this.#stored(id)}/cover`, {
-      method: 'PUT',
-      body,
-    });
+    const book = await request<ApiBook>(`/library/books/${this.#stored(id)}/cover`, init);
     this.#replace(book, id);
   }
 
