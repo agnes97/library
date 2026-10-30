@@ -38,7 +38,7 @@
   let found = $state.raw<SpineCandidate[] | null>(null);
   /** which of them is shown */
   let shown = $state(0);
-  /** every photo shown and passed over, by its URL, for searching again to skip */
+  /** every photo shown and passed over or tried by a search, by its URL, for searching again to skip */
   let seen: string[] = [];
   const candidate = $derived(found?.[shown]);
   const more = $derived(found !== null && shown < found.length - 1);
@@ -86,7 +86,7 @@
   const heading = $derived.by(() => {
     if (drawn) return 'The spine ChatGPT drew';
     if (found) {
-      if (!candidate) return 'No photo of its spine';
+      if (!candidate) return working ? 'Finding its spine' : 'No photo of its spine';
       return candidate.showsSpine ? 'Is this its spine?' : 'Could this be its spine?';
     }
     if (stage) return 'Drag around the spine';
@@ -180,10 +180,17 @@
 
   async function find() {
     if (busy) return;
-    seen = [...seen, ...(found ?? []).map(({ imageUrl }) => imageUrl)];
+    seen = [...new Set([...seen, ...(found ?? []).map(({ imageUrl }) => imageUrl)])];
     const signal = begin('finding');
     try {
-      found = await library.findSpines(book.id, seen, signal, (job) => (progress = job));
+      const { candidates, tried } = await library.findSpines(
+        book.id,
+        seen,
+        signal,
+        (job) => (progress = job)
+      );
+      seen = [...new Set([...seen, ...tried])];
+      found = candidates;
       shown = 0;
     } catch (failure) {
       if (signal.aborted) return;
@@ -371,7 +378,7 @@
         {/if}
         · <a href={candidate.pageUrl} target="_blank" rel="noopener noreferrer">where it was found</a>
       </p>
-    {:else}
+    {:else if !working}
       <p class="hint">
         {found.length > 0 ? 'That was every photo it found.' : 'None turned up this time.'}
         Let ChatGPT search again, or photograph your own copy.

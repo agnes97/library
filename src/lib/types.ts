@@ -199,7 +199,12 @@ export type SpineJob =
       /** how many found photos are being looked at, while vetting */
       photos?: number;
     }
-  | { status: 'done'; candidates: SpineCandidate[] }
+  | {
+      status: 'done';
+      candidates: SpineCandidate[];
+      /** every photo URL the search tried, shown or not, for searching again to skip */
+      tried?: string[];
+    }
   | { status: 'done'; image: string };
 
 /** a photo of a book's spine ChatGPT found on the web */

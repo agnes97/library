@@ -37,8 +37,8 @@ export const SAMPLES_QUERY = ['shelves', 'samples'] as const;
 /** how often a spine search or drawing running at OpenAI is looked in on, and for how long at most */
 const FOLLOW_EVERY = 3000;
 const FOLLOW_FOR = 6 * 60 * 1000;
-/** how many turned-down photos a search is told to skip, as many as prismify takes */
-const MAX_SEEN = 40;
+/** how many photos tried or turned down a search is told to skip, as many as prismify takes */
+const MAX_SEEN = 80;
 
 /** Waits `ms`, or rejects as soon as `signal` aborts. */
 function wait(ms: number, signal?: AbortSignal): Promise<void> {
@@ -190,15 +190,16 @@ class Library {
   }
 
   /**
-   * Has ChatGPT look for photos on the web that show the book's spine, other than those the reader
-   * already turned down (`seen`); nothing is saved.
+   * Looks for photos on the web that show the book's spine, other than those the reader already
+   * turned down or a search tried (`seen`), with every URL this search `tried` for the next to
+   * skip, even those that never came; nothing is saved.
    */
   async findSpines(
     id: string,
     seen: string[],
     signal?: AbortSignal,
     onProgress?: (progress: SpineProgress) => void
-  ): Promise<SpineCandidate[]> {
+  ): Promise<{ candidates: SpineCandidate[]; tried: string[] }> {
     const stored = this.#stored(id);
     const started = await request<SpineJob>(`/library/books/${stored}/spine/candidates`, {
       method: 'POST',
@@ -206,10 +207,13 @@ class Library {
       signal,
     });
     const done = await this.#follow(stored, started, signal, onProgress);
-    // it may turn up a turned-down photo again all the same
-    return 'candidates' in done
-      ? done.candidates.filter((candidate) => !seen.includes(candidate.imageUrl))
-      : [];
+    if (!('candidates' in done)) return { candidates: [], tried: [] };
+    return {
+      // it may turn up a turned-down photo again all the same
+      candidates: done.candidates.filter((candidate) => !seen.includes(candidate.imageUrl)),
+      // a prismify from before it told what it tried leaves it out
+      tried: done.tried ?? [],
+    };
   }
 
   /**
