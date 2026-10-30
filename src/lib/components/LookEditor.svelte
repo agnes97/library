@@ -277,16 +277,16 @@
         <Pill wide icon="upload" disabled={busy} onclick={() => spineInput?.click()}>
           Upload your own
         </Pill>
+        <Pill
+          wide
+          icon="search"
+          title="Search the web for photos of its spine"
+          disabled={busy}
+          onclick={() => pickSpine('find')}
+        >
+          Search the web
+        </Pill>
         {#if chatGpt}
-          <Pill
-            wide
-            icon="search"
-            title="Have ChatGPT search the web for photos of its spine"
-            disabled={busy}
-            onclick={() => pickSpine('find')}
-          >
-            Search with AI
-          </Pill>
           {#if book.spineUrl}
             <Pill
               wide
@@ -298,9 +298,8 @@
               Improve with AI
             </Pill>
           {/if}
-        {/if}
-        {#if !chatGpt}
-          <p class="aside">Connect ChatGPT under AI Keys in the menu to find and draw it.</p>
+        {:else}
+          <p class="aside">Connect ChatGPT under AI Keys in the menu to draw it sharp.</p>
         {/if}
       </div>
       <div class="column">

@@ -43,9 +43,9 @@
       Connected with the key ending <code>…{ai.keys.openai.hint}</code>
     </p>
     <p class="lead">
-      Open a book, then <em>Spine photo</em>. ChatGPT finds photos of its spine on the web and draws
-      a sharp one from the photo you pick. Each spine is charged to your OpenAI account, usually a
-      few cents, and no more than 10 searches or drawings run in ten minutes, or 60 in a day.
+      Open a book, then <em>Spine photo</em>, and crop its spine out of a photo. ChatGPT draws a
+      sharp one from the crop. Each spine is charged to your OpenAI account, usually a few cents,
+      and no more than 10 drawings run in ten minutes, or 60 in a day.
     </p>
     <p class="note">
       To stop it, disconnect here, or revoke the key on
@@ -63,8 +63,8 @@
     </button>
   {:else}
     <p class="lead">
-      ChatGPT can find photos of a book’s spine on the web and draw a sharp, straight one that joins
-      its cover. It runs on your own OpenAI API key, which you get like this:
+      ChatGPT can draw a sharp, straight spine that joins the cover from a photo of a book you
+      crop. It runs on your own OpenAI API key, which you get like this:
     </p>
 
     <ol class="steps">

@@ -7,7 +7,7 @@ export type Crop = { x: number; y: number; width: number; height: number };
 export const WHOLE: Crop = { x: 0, y: 0, width: 1, height: 1 };
 
 /** Loads a photo the right way up, as cameras store it sideways with a note to turn it. */
-export function loadPhoto(file: File): Promise<ImageBitmap> {
+export function loadPhoto(file: Blob): Promise<ImageBitmap> {
   return createImageBitmap(file, { imageOrientation: 'from-image' });
 }
 

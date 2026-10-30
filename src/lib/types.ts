@@ -185,38 +185,27 @@ export type AiKey = { hint: string };
 export type AiKeys = Record<AiProvider, AiKey | null>;
 
 /**
- * a search for or drawing of a spine as it runs at OpenAI, in the background as it takes longer
- * than a request may: still working, by its job id, or what it came to
+ * a drawing of a spine as it runs at OpenAI, in the background as it takes longer than a request
+ * may: still working, by its job id, or what it came to
  */
 export type SpineJob =
   | {
       status: 'working';
       job: string;
-      /** which step is running: searching the web, looking at the photos found, or drawing */
-      step?: 'search' | 'vetting' | 'drawing';
+      step?: 'drawing';
       /** still waiting its turn at OpenAI */
       queued?: boolean;
-      /** how many found photos are being looked at, while vetting */
-      photos?: number;
-    }
-  | {
-      status: 'done';
-      candidates: SpineCandidate[];
-      /** every photo URL the search tried, shown or not, for searching again to skip */
-      tried?: string[];
     }
   | { status: 'done'; image: string };
 
-/** a photo of a book's spine ChatGPT found on the web */
+/** a photo of a book image search found on the web, to crop its spine out of */
 export type SpineCandidate = {
-  /** the photo on the web, sent back to draw the spine after */
+  /** the photo on the web */
   imageUrl: string;
   /** the page it was found on */
   pageUrl: string;
-  /** a small copy of it as a data URL, as many sites won't show their photos elsewhere */
+  /** the image search's own small copy, which shows where the photo's site won't */
   preview: string;
-  /** what the photo shows, in a few words */
-  note: string;
-  /** whether ChatGPT thinks it shows the spine well enough to draw it after */
-  showsSpine: boolean;
+  /** the title of the page it was found on */
+  title: string;
 };

@@ -1,4 +1,4 @@
-import { request } from './api';
+import { request, requestBlob } from './api';
 import { sampleReadings, shelve } from './books';
 import type {
   ApiBook,
@@ -10,7 +10,7 @@ import type {
   SpineJob,
 } from './types';
 
-/** a spine search or drawing as it last stood at OpenAI */
+/** a spine drawing as it last stood at OpenAI */
 export type SpineProgress = Extract<SpineJob, { status: 'working' }>;
 
 /**
@@ -34,11 +34,9 @@ const photos = ({ coverUrl, coverColor, spineUrl, spineColor, spineRatio }: ApiB
 /** the query param that keeps a reader on the sample shelves through a reload: `?shelves=samples` */
 export const SAMPLES_QUERY = ['shelves', 'samples'] as const;
 
-/** how often a spine search or drawing running at OpenAI is looked in on, and for how long at most */
+/** how often a spine drawing running at OpenAI is looked in on, and for how long at most */
 const FOLLOW_EVERY = 3000;
 const FOLLOW_FOR = 6 * 60 * 1000;
-/** how many photos tried or turned down a search is told to skip, as many as prismify takes */
-const MAX_SEEN = 80;
 
 /** Waits `ms`, or rejects as soon as `signal` aborts. */
 function wait(ms: number, signal?: AbortSignal): Promise<void> {
@@ -189,36 +187,33 @@ class Library {
     this.#replace(book, id);
   }
 
-  /**
-   * Looks for photos on the web that show the book's spine, other than those the reader already
-   * turned down or a search tried (`seen`), with every URL this search `tried` for the next to
-   * skip, even those that never came; nothing is saved.
-   */
-  async findSpines(
-    id: string,
-    seen: string[],
-    signal?: AbortSignal,
-    onProgress?: (progress: SpineProgress) => void
-  ): Promise<{ candidates: SpineCandidate[]; tried: string[] }> {
-    const stored = this.#stored(id);
-    const started = await request<SpineJob>(`/library/books/${stored}/spine/candidates`, {
-      method: 'POST',
-      body: JSON.stringify({ seen: seen.slice(-MAX_SEEN) }),
-      signal,
-    });
-    const done = await this.#follow(stored, started, signal, onProgress);
-    if (!('candidates' in done)) return { candidates: [], tried: [] };
-    return {
-      // it may turn up a turned-down photo again all the same
-      candidates: done.candidates.filter((candidate) => !seen.includes(candidate.imageUrl)),
-      // a prismify from before it told what it tried leaves it out
-      tried: done.tried ?? [],
-    };
+  /** Looks for photos of the book on the web, to crop its spine out of; nothing is saved. */
+  async findSpines(id: string, signal?: AbortSignal): Promise<SpineCandidate[]> {
+    const { candidates } = await request<{ candidates: SpineCandidate[] }>(
+      `/library/books/${this.#stored(id)}/spine/candidates`,
+      { signal }
+    );
+    return candidates;
   }
 
   /**
-   * Has ChatGPT draw the spine straight and sharp after a photo of it, one found on the web by its
-   * URL or the reader's own; it is only shown until the reader saves it with `setSpine`.
+   * A photo found on the web, fetched through prismify as most sites won't let the library read
+   * theirs, or the image search's own small copy when the site turns prismify away too.
+   */
+  async spinePhoto({ imageUrl, preview }: SpineCandidate, signal?: AbortSignal): Promise<Blob> {
+    const fetchPhoto = (url: string) =>
+      requestBlob(`/library/spine-photo?${new URLSearchParams({ url })}`, { signal });
+    try {
+      return await fetchPhoto(imageUrl);
+    } catch (failure) {
+      if (signal?.aborted || preview === imageUrl) throw failure;
+      return fetchPhoto(preview);
+    }
+  }
+
+  /**
+   * Has ChatGPT draw the spine straight and sharp after a photo of it, the one on the shelf by its
+   * URL or one the reader cropped; it is only shown until the reader saves it with `setSpine`.
    */
   async drawSpine(
     id: string,
@@ -240,16 +235,13 @@ class Library {
       body,
       signal,
     });
-    const done = await this.#follow(stored, started, signal, onProgress);
-    if (!('image' in done)) throw new Error('ChatGPT didn’t draw a spine, try again');
-
-    const { image } = done;
+    const { image } = await this.#follow(stored, started, signal, onProgress);
     const bytes = Uint8Array.from(atob(image), (char) => char.charCodeAt(0));
     return new Blob([bytes], { type: 'image/png' });
   }
 
   /**
-   * Looks in on a search or drawing for the stored book until it is done, or `signal` aborts,
+   * Looks in on a drawing for the stored book until it is done, or `signal` aborts,
    * telling `onProgress` how it stands each time.
    */
   async #follow(

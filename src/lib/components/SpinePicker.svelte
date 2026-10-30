@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import { ai } from '../ai.svelte';
   import { library, type SpineProgress } from '../library.svelte';
   import { cropPhoto, drawTurned, loadPhoto, WHOLE, type Crop } from '../photo';
@@ -9,7 +10,7 @@
 
   type Props = {
     book: Book;
-    /** what the reader chose: ChatGPT finding photos of it, redrawing the current one, or their own photo */
+    /** what the reader chose: finding photos of it on the web, ChatGPT redrawing the current one, or their own photo */
     start: 'find' | 'improve' | File;
     onClose: () => void;
   };
@@ -34,25 +35,23 @@
   let crop = $state<Crop>(WHOLE);
   let saving = $state(false);
   let error = $state<string | null>(null);
-  /** photos of the spine ChatGPT found on the web, which the reader goes through one by one */
+  /** photos of the book found on the web, all shown at once for the reader to pick from */
   let found = $state.raw<SpineCandidate[] | null>(null);
-  /** which of them is shown */
-  let shown = $state(0);
-  /** every photo shown and passed over or tried by a search, by its URL, for searching again to skip */
-  let seen: string[] = [];
-  const candidate = $derived(found?.[shown]);
-  const more = $derived(found !== null && shown < found.length - 1);
+  /** the found photo last opened to crop, marked among the others on going back to them */
+  let picked = $state.raw<SpineCandidate | null>(null);
+  /** found photos whose small copy won't show, which drop out of the grid */
+  const broken = new SvelteSet<string>();
   /** the spine ChatGPT drew, shown until it is saved or let go */
   let drawn = $state.raw<{ blob: Blob; url: string; from: string | Blob } | null>(null);
-  /** what ChatGPT is busy with, which can take a minute */
-  let working = $state<'finding' | 'drawing' | null>(null);
+  /** what is under way: searching, fetching a found photo, or ChatGPT drawing, which can take a minute */
+  let working = $state<'finding' | 'opening' | 'drawing' | null>(null);
   /** the step it is on, as OpenAI last told */
   let progress = $state.raw<SpineProgress | null>(null);
   /** when it started, and the clock ticking along beside it */
   let startedAt = $state(0);
   let now = $state(0);
   const busy = $derived(saving || working !== null);
-  /** stops looking in on ChatGPT once the picker closes */
+  /** stops whatever is under way once the picker closes */
   const closing = new AbortController();
   /** stops the search or drawing under way when the reader gives up on it */
   let stopping: AbortController | null = null;
@@ -85,11 +84,8 @@
 
   const heading = $derived.by(() => {
     if (drawn) return 'The spine ChatGPT drew';
-    if (found) {
-      if (!candidate) return working ? 'Finding its spine' : 'No photo of its spine';
-      return candidate.showsSpine ? 'Is this its spine?' : 'Could this be its spine?';
-    }
     if (stage) return 'Drag around the spine';
+    if (found) return found.length > 0 ? 'Pick a photo of its spine' : 'No photo of its spine';
     if (start === 'find') return 'Finding its spine';
     if (start === 'improve') return 'Improving its spine';
     return 'Photo of the spine';
@@ -103,7 +99,7 @@
 
   $effect(() => () => closing.abort());
 
-  // the elapsed time counts up while ChatGPT works
+  // the elapsed time counts up while it works
   $effect(() => {
     if (!working) return;
     const timer = setInterval(() => (now = Date.now()), 1000);
@@ -121,35 +117,21 @@
   const failed = (failure: unknown, fallback: string) =>
     failure instanceof Error ? failure.message : fallback;
 
-  /** What ChatGPT is doing, in words. */
+  /** What is under way, in words. */
   const doing = $derived.by(() => {
+    if (working === 'finding') return 'Searching the web for photos of it';
+    if (working === 'opening') return 'Fetching the photo';
     if (!progress || progress.queued) return 'Waiting for ChatGPT to start';
-    switch (progress.step) {
-      case 'search':
-        return 'Searching the web for photos of its spine';
-      case 'vetting':
-        return progress.photos
-          ? `Looking through ${progress.photos} photos found for its spine`
-          : 'Looking through the photos found for its spine';
-      case 'drawing':
-        return 'Drawing the spine straight and sharp';
-      default:
-        return working === 'finding' ? 'Searching the web for its spine' : 'Drawing the spine';
-    }
+    return 'Drawing the spine straight and sharp';
   });
-
-  /** which step of how many it is on, as a search looks at what it found after */
-  const stepOf = $derived(
-    working === 'finding' ? `Step ${progress?.step === 'vetting' ? 2 : 1} of 2 · ` : ''
-  );
 
   const elapsed = $derived.by(() => {
     const seconds = Math.max(0, Math.floor((now - startedAt) / 1000));
     return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
   });
 
-  /** Starts ChatGPT working, returning the signal that stops it. */
-  function begin(what: 'finding' | 'drawing'): AbortSignal {
+  /** Starts working, returning the signal that stops it. */
+  function begin(what: 'finding' | 'opening' | 'drawing'): AbortSignal {
     working = what;
     progress = null;
     error = null;
@@ -166,49 +148,55 @@
     if (!drawn && !found && !stage && !error && !closing.signal.aborted) onClose();
   }
 
-  /** Lets go of the search or drawing; it may still finish at OpenAI, unseen. */
+  /** Lets go of what is under way; a drawing may still finish at OpenAI, unseen. */
   function stop() {
     stopping?.abort();
   }
 
-  /** Goes up a level: from the drawn spine to what it was drawn after, otherwise out. */
+  /**
+   * Goes up a level: from the drawn spine to what it was drawn after, from a photo being cropped
+   * to the others found, otherwise out.
+   */
   export function back() {
     if (saving) return;
     if (drawn && (found || stage)) drawn = null;
-    else onClose();
+    else if (stage && found) {
+      photo = null;
+      error = null;
+    } else onClose();
   }
 
   async function find() {
     if (busy) return;
-    seen = [...new Set([...seen, ...(found ?? []).map(({ imageUrl }) => imageUrl)])];
     const signal = begin('finding');
     try {
-      const { candidates, tried } = await library.findSpines(
-        book.id,
-        seen,
-        signal,
-        (job) => (progress = job)
-      );
-      seen = [...new Set([...seen, ...tried])];
-      found = candidates;
-      shown = 0;
+      found = await library.findSpines(book.id, signal);
     } catch (failure) {
       if (signal.aborted) return;
       error = failed(failure, 'The search failed, try again');
-      // the key may have been let go on the server, which the menu should show
-      ai.load();
     } finally {
       end();
     }
   }
 
-  /** Passes over the photo shown for the next one found, or searches again after the last. */
-  function next() {
-    if (more) shown++;
-    else find();
+  /** Opens a found photo to crop its spine out of. */
+  async function pick(candidate: SpineCandidate) {
+    if (busy) return;
+    const signal = begin('opening');
+    try {
+      const blob = await library.spinePhoto(candidate, signal);
+      if (signal.aborted) return;
+      await open(blob);
+      picked = candidate;
+    } catch (failure) {
+      if (signal.aborted) return;
+      error = failed(failure, 'That photo can’t be fetched, pick another');
+    } finally {
+      end();
+    }
   }
 
-  /** Has ChatGPT draw the spine after a found photo, by its URL, or the reader's own. */
+  /** Has ChatGPT draw the spine after one on the shelf, by its URL, or a crop of a photo. */
   async function draw(from: string | Blob) {
     if (busy) return;
     const signal = begin('drawing');
@@ -218,6 +206,7 @@
     } catch (failure) {
       if (signal.aborted) return;
       error = failed(failure, 'Drawing failed, try again');
+      // the key may have been let go on the server, which the menu should show
       ai.load();
     } finally {
       end();
@@ -270,10 +259,11 @@
         : { x: 0.44, y: 0.05, width: 0.12, height: 0.9 };
   }
 
-  async function open(file: File) {
+  async function open(file: Blob) {
     error = null;
     try {
       photo = await loadPhoto(file);
+      picked = null;
       turns = 0;
       startCrop();
     } catch {
@@ -360,30 +350,50 @@
 </script>
 
 <div class="spine-picker" role="group" aria-label="Photo of the spine" aria-busy={working !== null}>
-  <PageBar title={heading} cancel={!!drawn || !!stage} disabled={saving} onBack={back} />
+  <PageBar
+    title={heading}
+    cancel={!!drawn || (!!stage && !found)}
+    disabled={saving}
+    onBack={back}
+  />
+
+  <!-- kept while a photo is cropped, so going back finds the grid scrolled where it was -->
+  {#if found}
+    <div class="found" style:display={drawn || stage ? 'none' : null}>
+      {#if found.length > 0}
+        <ul aria-label="Photos found on the web">
+          {#each found as candidate (candidate.imageUrl)}
+            {#if !broken.has(candidate.imageUrl)}
+              <li>
+                <button
+                  type="button"
+                  class:picked={candidate === picked}
+                  title={candidate.title}
+                  disabled={busy}
+                  onclick={() => pick(candidate)}
+                >
+                  <img
+                    src={candidate.preview}
+                    alt={candidate.title || `A photo found for ${book.title}`}
+                    loading="lazy"
+                    referrerpolicy="no-referrer"
+                    onerror={() => broken.add(candidate.imageUrl)}
+                  />
+                </button>
+              </li>
+            {/if}
+          {/each}
+        </ul>
+        <p class="hint">Pick the one that shows its spine best, to crop it out.</p>
+      {:else}
+        <p class="hint">None turned up. Photograph your own copy instead.</p>
+      {/if}
+    </div>
+  {/if}
 
   {#if drawn}
     <img class="drawn" src={drawn.url} alt="The drawn spine of {book.title}" />
     <p class="hint">Save it if it looks right, or let ChatGPT try again.</p>
-  {:else if found}
-    {#if candidate}
-      <figure class="found">
-        <img src={candidate.preview} alt="A photo found on the web for {book.title}" />
-        <figcaption>{candidate.note}</figcaption>
-      </figure>
-      <p class="hint">
-        Photo {shown + 1} of {found.length}
-        {#if !candidate.showsSpine}
-          · ChatGPT doubts it shows the spine
-        {/if}
-        · <a href={candidate.pageUrl} target="_blank" rel="noopener noreferrer">where it was found</a>
-      </p>
-    {:else if !working}
-      <p class="hint">
-        {found.length > 0 ? 'That was every photo it found.' : 'None turned up this time.'}
-        Let ChatGPT search again, or photograph your own copy.
-      </p>
-    {/if}
   {:else if stage}
     <div class="cropper" bind:clientWidth={roomWidth} bind:clientHeight={roomHeight}>
       <div
@@ -408,7 +418,15 @@
         aria-label="The spine as it will stand on the shelf"
       ></canvas>
     </div>
-  {:else if start === 'improve' && book.spineUrl}
+    {#if picked}
+      <p class="hint">
+        Found on
+        <a href={picked.pageUrl} target="_blank" rel="noopener noreferrer">
+          {new URL(picked.pageUrl).hostname.replace(/^www\./, '')}</a
+        >
+      </p>
+    {/if}
+  {:else if start === 'improve' && book.spineUrl && !found}
     <img class="current" src={book.spineUrl} alt="The spine of {book.title}" />
   {/if}
 
@@ -416,7 +434,7 @@
     {#if working}
       <div class="working">
         <span class="spinner" aria-hidden="true"></span>
-        <p role="status">{stepOf}{doing}…</p>
+        <p role="status">{doing}…</p>
         <span class="elapsed" aria-label="Time taken so far">{elapsed}</span>
         <button type="button" class="stop" onclick={stop}>Stop</button>
       </div>
@@ -434,25 +452,6 @@
         <Pill kind="primary" disabled={busy} onclick={() => save('drawn')}>
           {saving ? 'Saving…' : 'Save'}
         </Pill>
-      {:else if found}
-        <Pill disabled={busy} onclick={next}>
-          {#if working === 'finding'}
-            Searching…
-          {:else if more}
-            Not it
-          {:else}
-            {candidate ? 'Not it, search again' : 'Search again'}
-          {/if}
-        </Pill>
-        {#if candidate}
-          <Pill
-            kind="primary"
-            disabled={busy}
-            onclick={() => candidate && draw(candidate.imageUrl)}
-          >
-            {working === 'drawing' ? 'Drawing…' : 'Use it'}
-          </Pill>
-        {/if}
       {:else if stage}
         <Pill
           icon="turn"
@@ -473,6 +472,10 @@
         {/if}
         <Pill kind="primary" disabled={busy} onclick={() => save('crop')}>
           {saving ? 'Saving…' : 'Save'}
+        </Pill>
+      {:else if found}
+        <Pill icon="upload" disabled={busy} onclick={() => photoInput?.click()}>
+          Upload your own
         </Pill>
       {:else if error && !working}
         <Pill disabled={busy} onclick={retry}>
@@ -538,30 +541,61 @@
     box-shadow: 0 6px 14px rgb(46 32 38 / 0.35);
   }
 
-  /* the found photo shown, as large as the page lets it */
+  /* every found photo, scrolling within the page */
   .found {
     flex: 1;
     min-height: 0;
     align-self: stretch;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 8px;
+    gap: 10px;
+  }
+
+  .found ul {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    align-content: start;
+    gap: 10px;
     margin: 0;
+    padding: 4px;
+    list-style: none;
+  }
+
+  .found button {
+    display: block;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: rgb(107 74 88 / 0.08);
+    cursor: pointer;
+    overflow: hidden;
+  }
+
+  .found button:disabled {
+    cursor: default;
+  }
+
+  .found button:hover:not(:disabled),
+  .found button.picked {
+    outline: 2px solid var(--paper-muted);
+    outline-offset: 2px;
+  }
+
+  .found button:focus-visible {
+    outline: 2px solid var(--paper-accent);
+    outline-offset: 2px;
   }
 
   .found img {
-    flex: 1;
-    min-height: 0;
-    max-width: 100%;
+    display: block;
+    width: 100%;
+    height: 100%;
     object-fit: contain;
-    box-shadow: 0 4px 10px rgb(46 32 38 / 0.3);
-  }
-
-  .found figcaption {
-    font-size: 14px;
-    color: var(--paper-title);
-    text-align: center;
   }
 
   .hint a {
