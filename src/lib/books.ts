@@ -14,17 +14,15 @@ const PALETTES: Book['colors'][] = [
   { c1: '#4a2a1c', c2: '#24130b', accent: '#f0b48a', ink: '#f5e7dc' },
 ];
 
-/** Spine sizes, one picked per book whose page count is unknown. */
-const WIDTHS = [52, 44, 60, 38, 66, 48, 56, 42, 62, 46];
 const HEIGHTS = [286, 248, 270, 300, 262, 236, 292, 254, 278, 244];
+/** Page counts, one picked per book whose own is unknown, to make it as thick as a usual book. */
+const GUESSED_PAGES = [320, 280, 400, 240, 460, 300, 360, 260, 420, 340];
 /** Slimmer volumes for a series, so more of them fit in a pile. */
-const SERIES_WIDTHS = [22, 24, 26, 28];
-/** The page counts of the thinnest and thickest books; anything beyond gets their width. */
-const MIN_PAGES = 100;
+const GUESSED_SERIES_PAGES = [180, 200, 220, 240];
+/** How thin and thick a spine may be: thin enough to letter its title, and what the shelves can hold. */
+const WIDTHS: [number, number] = [16, 110];
+/** the page count past which a book grows no thicker */
 const MAX_PAGES = 1000;
-/** How thick a spine grows across that range, standing and lying in a pile. */
-const SPINE_RANGE: [number, number] = [34, 84];
-const SERIES_RANGE: [number, number] = [22, 40];
 /** A series longer than a trilogy lies flat only when every volume is slimmer than this. */
 const SLIM_PAGES = 300;
 
@@ -74,16 +72,18 @@ function hash(text: string) {
   return h >>> 0;
 }
 
-/** A photographed spine keeps its shape, within what the shelves can hold. */
-const PHOTO_WIDTHS: [number, number] = [16, 110];
-
-/** A spine as thick as the book is long; picked from `fallback` when its pages are unknown. */
-function thickness(pages: number | null, [thin, thick]: [number, number], fallback: number) {
-  if (!pages) return fallback;
-  const share =
-    (Math.min(Math.max(pages, MIN_PAGES), MAX_PAGES) - MIN_PAGES) / (MAX_PAGES - MIN_PAGES);
-  return Math.round(thin + share * (thick - thin));
+/**
+ * A real book's thickness as a share of its height: 0.07 mm a page and 2 mm of boards, on a book
+ * 20 cm tall, as the photographed spines of the sample books measure on average. A book longer
+ * than `MAX_PAGES` is printed on thinner paper, so it grows no thicker.
+ */
+export function depthShare(pages: number) {
+  return (Math.min(pages, MAX_PAGES) * 0.07 + 2) / 200;
 }
+
+/** A spine this `share` of its height, within `WIDTHS`. */
+const spineWidth = (height: number, share: number) =>
+  Math.round(Math.min(Math.max(height * share, WIDTHS[0]), WIDTHS[1]));
 
 /**
  * The series whose volumes lie flat in piles: any trilogy, and a longer one only when every volume
@@ -163,9 +163,10 @@ function toShelfBook({ id, read, book, readBy, addedBy }: ApiReading, lying: boo
   const seed = hash(book.id);
   const height = HEIGHTS[(hash(book.series ?? book.id) >>> 12) % HEIGHTS.length];
   const dye = book.spineColor ?? book.coverColor;
-  const bulk = lying
-    ? thickness(book.pages, SERIES_RANGE, SERIES_WIDTHS[(seed >>> 4) % SERIES_WIDTHS.length])
-    : thickness(book.pages, SPINE_RANGE, WIDTHS[(seed >>> 4) % WIDTHS.length]);
+  // as thick as a real book of its pages, standing or lying in a pile
+  const guessed = lying ? GUESSED_SERIES_PAGES : GUESSED_PAGES;
+  const pages = book.pages ?? guessed[(seed >>> 4) % guessed.length];
+  const bulk = spineWidth(height, depthShare(pages));
   return {
     key: id,
     book: {
@@ -183,10 +184,9 @@ function toShelfBook({ id, read, book, readBy, addedBy }: ApiReading, lying: boo
       seriesNumber: book.series ? (book.seriesNumber ?? volumeFromTitle(book.title)) : undefined,
       colors: dye ? paletteFrom(dye) : PALETTES[seed % PALETTES.length],
     },
-    // the volumes of a series share their size, give or take their thickness
-    width: book.spineRatio
-      ? Math.round(Math.min(Math.max(height * book.spineRatio, PHOTO_WIDTHS[0]), PHOTO_WIDTHS[1]))
-      : bulk,
+    // the volumes of a series share their size, give or take their thickness; its pages set it,
+    // and only a book whose pages are unknown takes it from its spine photo
+    width: book.spineRatio && !book.pages ? spineWidth(height, book.spineRatio) : bulk,
     bulk,
     height,
     lying,

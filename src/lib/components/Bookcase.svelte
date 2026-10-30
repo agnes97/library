@@ -63,6 +63,8 @@
   /** how high a pile may grow, clear of the tag hanging over it; and the gap between its books */
   const PILE_HEIGHT = 260;
   const PILE_GAP = 1;
+  /** the most books a pile holds, however slim they are */
+  const PILE_BOOKS = 10;
   /** the room the candle takes, margins included */
   const CANDLE_WIDTH = 30 + 22 + 26;
 
@@ -118,7 +120,7 @@
         pile = [item];
         units.push(pile);
         stacked = item.bulk;
-      } else if (stacked + PILE_GAP + item.bulk <= PILE_HEIGHT) {
+      } else if (pile.length < PILE_BOOKS && stacked + PILE_GAP + item.bulk <= PILE_HEIGHT) {
         pile.push(item);
         stacked += PILE_GAP + item.bulk;
       } else {
@@ -148,7 +150,7 @@
     units.reduce((sum, unit, i) => sum + (i ? GAP : 0) + widthOf(unit), 0);
 
   /** the smallest a series is shrunk to so it fits one shelf; one longer than that breaks */
-  const MIN_SERIES_SCALE = 0.75;
+  const MIN_SERIES_SCALE = 0.65;
 
   /** where the volumes of the series `at` belongs to begin and end in the queue */
   function seriesBounds(queue: (ShelfBook | ShelfBook[])[], at: number): [number, number] {
@@ -161,14 +163,24 @@
     return [from, to];
   }
 
-  /** a photographed spine keeps its shape, as width and height shrink together */
+  /** a book lying in a pile keeps its shape, as its length and thickness shrink together */
   const shrink = (item: ShelfBook, scale: number) => ({
     ...item,
     width: Math.floor(item.width * scale),
     height: Math.floor(item.height * scale),
   });
 
-  /** Shrinks each series a little too long for a shelf, spines and piles alike, until it fits one. */
+  /** a standing spine grows thinner, and shorter by only half as much, to stay near the books around it */
+  const thin = (item: ShelfBook, scale: number) => ({
+    ...item,
+    width: Math.floor(item.width * scale),
+    height: Math.floor(item.height * (1 + scale) / 2),
+  });
+
+  /**
+   * Fits each series a little too long for a shelf onto one: its standing spines grow thinner and
+   * its piles shorter.
+   */
   function fitSeries(queue: (ShelfBook | ShelfBook[])[], inner: number) {
     const fitted = [...queue];
     for (let at = 0; at < queue.length; ) {
@@ -186,7 +198,7 @@
       units.forEach((unit, i) => {
         fitted[from + i] = Array.isArray(unit)
           ? unit.map((item) => shrink(item, scale))
-          : shrink(unit, scale);
+          : thin(unit, scale);
       });
     }
     return fitted;

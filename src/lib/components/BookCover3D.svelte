@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { depthShare } from '../books';
   import { coverShape } from '../covers';
   import type { Book } from '../types';
 
@@ -32,10 +33,16 @@
   );
   let brokenSpine = $state<string>();
   const spinePhoto = $derived(book.spineUrl !== brokenSpine ? book.spineUrl : undefined);
-  /** a photographed spine keeps its shape, as far as the cover's own shape allows */
+  /**
+   * as thick as its pages make it, or as its spine photo shows when they are unknown, as far as the
+   * cover's own shape allows
+   */
+  const share = $derived(
+    book.pages ? depthShare(book.pages) : spinePhoto ? book.spineRatio : undefined
+  );
   const depth = $derived(
-    book.spineRatio && spinePhoto
-      ? clamp(Math.round(height * book.spineRatio), 10, Math.round(height * 0.3))
+    share
+      ? clamp(Math.round(height * share), 10, Math.round(height * 0.3))
       : clamp(Math.round(height * 0.13), 14, 30)
   );
 
@@ -318,6 +325,7 @@
     justify-content: center;
   }
 
+  /* the photo fills the spine, stretched or squeezed to the book's thickness */
   .spine img {
     width: 100%;
     height: 100%;

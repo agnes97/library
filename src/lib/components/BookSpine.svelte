@@ -178,7 +178,7 @@
   /* a photo of the real spine, rounded by the same light as the cloth */
   .photo {
     overflow: hidden;
-    background: var(--c2);
+    background: var(--c1);
   }
 
   .photo img {
