@@ -12,9 +12,11 @@
     flat?: boolean;
     /** gets the spine, so the open book can fly out of it and back */
     onSelect: (spine: HTMLElement) => void;
+    /** how many ms after the shelves fill it is set down on its own; left out once it stands */
+    arrive?: number;
   };
 
-  let { book, width, height, lean, flat = false, onSelect }: Props = $props();
+  let { book, width, height, lean, flat = false, onSelect, arrive }: Props = $props();
 
   /** a spine photo that failed to load, so the cloth one shows instead */
   let brokenPhoto = $state<string>();
@@ -28,11 +30,12 @@
 
 <button
   type="button"
-  class={['spine', { lean: lean !== undefined, flat, photo }]}
+  class={['spine', { lean: lean !== undefined, flat, photo, arriving: arrive !== undefined }]}
   aria-label="{book.title} by {book.author}"
   style:--w="{width}px"
   style:--h="{height}px"
   style:--lean={lean === undefined ? undefined : `${lean}px`}
+  style:--arrive={arrive === undefined ? undefined : `${arrive}ms`}
   style:--c1={book.colors.c1}
   style:--c2={book.colors.c2}
   style:--book-accent={book.colors.accent}
@@ -207,6 +210,20 @@
 
   .photo.flat::after {
     background: linear-gradient(180deg, rgb(255 255 255 / 0.06), transparent 45%, rgb(0 0 0 / 0.4));
+  }
+
+  /* set down from a little above, on `transform` so it keeps its own lean and hover lift */
+  @keyframes arrive {
+    from {
+      opacity: 0;
+      transform: translateY(-28px);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .arriving {
+      animation: arrive 0.55s cubic-bezier(0.22, 0.9, 0.3, 1) var(--arrive) backwards;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {

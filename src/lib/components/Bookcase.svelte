@@ -325,12 +325,49 @@
 
   const shelves = $derived(layout(readings, shelfDecor, rowWidth));
 
+  /** the most time between two books set down on filling shelves, and the longest it all takes */
+  const ARRIVE_STEP = 70;
+  const ARRIVE_SPAN = 2000;
+  /** how long one book takes to settle, as in BookSpine's styles */
+  const ARRIVE_DURATION = 550;
+
+  /** when each book is set down after the shelves fill, by its key; empty once they all stand */
+  let arrival = $state.raw(new Map<string, number>());
+  /** the books on the shelves before, to tell a whole new shelf-full from a book added or taken */
+  let shelved = new Set<string>();
+  let arrived: ReturnType<typeof setTimeout> | undefined;
+
+  /** every book's key as it stands on the shelves, left to right and top down, a pile bottom up */
+  const keysInPlace = () =>
+    shelves.flatMap(({ items }) =>
+      items.flatMap((item) => ('pile' in item ? item.pile.map(({ key }) => key) : item.key))
+    );
+
+  // books filling empty shelves, or replacing every one there (logging in, the samples), are set
+  // down one by one as they stand, not in reading order, which piles and full piles shuffle
+  $effect.pre(() => {
+    const ordered = readings.map(({ key }) => key);
+    const fresh = ordered.length > 0 && !ordered.some((key) => shelved.has(key));
+    shelved = new Set(ordered);
+    if (!fresh) return;
+
+    // any not yet laid out (the case still unmeasured) follow in reading order
+    const keys = [...new Set([...keysInPlace(), ...ordered])];
+    const step = Math.min(ARRIVE_STEP, ARRIVE_SPAN / keys.length);
+    arrival = new Map(keys.map((key, i) => [key, Math.round(i * step)]));
+    clearTimeout(arrived);
+    arrived = setTimeout(() => (arrival = new Map()), ARRIVE_SPAN + ARRIVE_DURATION);
+  });
+
+  $effect(() => () => clearTimeout(arrived));
+
   /** re-measures the case while it is mounted */
   let refit: (() => void) | undefined;
 
   // the case grows and shrinks by whole shelves as its width changes
   $effect(() => {
     void shelves.length;
+    void onAdd;
     refit?.();
   });
 
@@ -355,10 +392,15 @@
       pinTop = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
       const above = viewportEl.getBoundingClientRect().top - caseEl.getBoundingClientRect().top;
       // the shelf window runs to the bottom of the window, so the plinth only scrolls into view
-      // once the last shelf has passed
-      const height = Math.max(380, Math.floor(window.innerHeight - pinTop - above));
+      // once the last shelf has passed; a case with fewer shelves than that ends below its last
+      const last = stackEl.lastElementChild as HTMLElement;
+      const content = last.offsetTop + last.offsetHeight;
+      const height = Math.min(
+        content,
+        Math.max(380, Math.floor(window.innerHeight - pinTop - above))
+      );
       viewportHeight = height;
-      travel = Math.max(0, stackEl.scrollHeight - height);
+      travel = Math.max(0, content - height);
     }
 
     function sync() {
@@ -414,12 +456,26 @@
       <!-- listed bottom first, stacked from the shelf up -->
       {#each item.pile as volume (volume.key)}
         {@const { book, width, height } = volume}
-        <BookSpine {book} {width} {height} flat onSelect={(spine) => onSelect(volume, spine)} />
+        <BookSpine
+          {book}
+          {width}
+          {height}
+          flat
+          arrive={arrival.get(volume.key)}
+          onSelect={(spine) => onSelect(volume, spine)}
+        />
       {/each}
     </div>
   {:else}
     {@const { book, width, height, lean } = item}
-    <BookSpine {book} {width} {height} {lean} onSelect={(spine) => onSelect(item, spine)} />
+    <BookSpine
+      {book}
+      {width}
+      {height}
+      {lean}
+      arrive={arrival.get(item.key)}
+      onSelect={(spine) => onSelect(item, spine)}
+    />
   {/if}
 {/snippet}
 
@@ -497,7 +553,6 @@
                     >{/each}
                 </p>
               </div>
-              <div class="plank"></div>
             </div>
           </div>
           <div class="shade" aria-hidden="true"></div>
@@ -711,6 +766,8 @@
   /* the last, empty shelf */
   .end {
     align-items: center;
+    /* no books stand on it, so it only needs room for its words; the plinth is its floor */
+    height: 350px;
   }
 
   /*
@@ -719,6 +776,7 @@
    */
   .last {
     isolation: auto;
+    height: 350px;
   }
 
   .last::before {

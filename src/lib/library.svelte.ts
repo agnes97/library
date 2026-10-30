@@ -20,6 +20,9 @@ const photos = ({ coverUrl, coverColor, spineUrl, spineColor, spineRatio }: ApiB
   spineRatio,
 });
 
+/** how many more times a load tries when the connection drops, waiting 1, 2, 4… s between */
+const RETRIES = 4;
+
 class Library {
   /** every book read, newest first, as the API returns it */
   #readings = $state.raw<ApiReading[]>([]);
@@ -39,17 +42,32 @@ class Library {
     const generation = ++this.#generation;
     this.status = 'loading';
 
-    try {
-      const readings = await request<ApiReading[]>('/library/readings');
-      if (generation !== this.#generation) return;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const readings = await request<ApiReading[]>('/library/readings');
+        if (generation !== this.#generation) return;
 
-      this.#readings = readings;
-      this.status = 'idle';
-    } catch (error) {
-      if (generation !== this.#generation) return;
-      console.error(error);
-      this.status = 'error';
+        this.#readings = readings;
+        this.status = 'idle';
+        return;
+      } catch (error) {
+        if (generation !== this.#generation) return;
+        // a dropped connection (fetch throws a TypeError) is tried again, a little later each time
+        if (error instanceof TypeError && attempt < RETRIES) {
+          await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** attempt));
+          if (generation !== this.#generation) return;
+          continue;
+        }
+        console.error(error);
+        this.status = 'error';
+        return;
+      }
     }
+  }
+
+  /** Tries the shelves again after a load that failed, as when the connection comes back. */
+  retry() {
+    if (this.status === 'error') this.load();
   }
 
   /** Saves a reading and shelves it in place, ahead of any that sort the same (it is the newest added). */

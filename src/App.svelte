@@ -35,6 +35,20 @@
     else library.clear();
   });
 
+  /** a load lost to a dropped connection is tried again once the reader is back */
+  function retry() {
+    if (auth.isAuthenticated && document.visibilityState === 'visible') library.retry();
+  }
+
+  $effect(() => {
+    window.addEventListener('online', retry);
+    document.addEventListener('visibilitychange', retry);
+    return () => {
+      window.removeEventListener('online', retry);
+      document.removeEventListener('visibilitychange', retry);
+    };
+  });
+
   function select(reading: ShelfBook, spine: HTMLElement) {
     selected = { reading, spine };
   }
