@@ -1,11 +1,13 @@
 <script lang="ts">
+  import { ai, providers } from './lib/ai.svelte';
   import { auth } from './lib/auth.svelte';
   import { shelfDecor } from './lib/books';
   import { library, SAMPLES_QUERY } from './lib/library.svelte';
-  import type { ShelfBook } from './lib/types';
+  import type { AiProvider, ShelfBook } from './lib/types';
   import AddBookForm from './lib/components/AddBookForm.svelte';
   import Backdrop from './lib/components/Backdrop.svelte';
   import Bookcase from './lib/components/Bookcase.svelte';
+  import ChatGptConnection from './lib/components/ChatGptConnection.svelte';
   import Header from './lib/components/Header.svelte';
   import LoginForm from './lib/components/LoginForm.svelte';
   import Modal from './lib/components/Modal.svelte';
@@ -13,6 +15,15 @@
 
   let isLoginOpen = $state(false);
   let isAddOpen = $state(false);
+  let isAiOpen = $state(false);
+  /** the AI service whose key the open popup connects */
+  let aiProvider = $state<AiProvider>('openai');
+  const aiLabel = $derived(providers.find(({ id }) => id === aiProvider)?.label ?? 'AI');
+
+  function openAi(provider: AiProvider) {
+    aiProvider = provider;
+    isAiOpen = true;
+  }
   /**
    * visitors not logged in see a few sample books, as do readers who ask for them; nothing shows
    * while the login is checked
@@ -29,10 +40,15 @@
       (readings.find(({ key }) => key === selected?.reading.key) ?? selected.reading)
   );
 
-  // the shelves are only for those logged in
+  // the shelves, and the AI that draws their spines, are only for those logged in
   $effect(() => {
-    if (auth.isAuthenticated) library.load();
-    else library.clear();
+    if (auth.isAuthenticated) {
+      library.load();
+      ai.load();
+    } else {
+      library.clear();
+      ai.clear();
+    }
   });
 
   // the address says when the samples are showing, so a reload keeps them
@@ -67,7 +83,7 @@
   <Backdrop />
 
   <div class="outer">
-    <Header onLoginClick={() => (isLoginOpen = true)} />
+    <Header onLoginClick={() => (isLoginOpen = true)} onAiClick={openAi} />
 
     <main>
       <div class="divider" aria-hidden="true">
@@ -107,6 +123,12 @@
   <!-- mounted only while open, so every visit starts with an empty search -->
   {#if isAddOpen}
     <AddBookForm onDone={() => (isAddOpen = false)} />
+  {/if}
+</Modal>
+
+<Modal bind:open={isAiOpen} title={aiLabel}>
+  {#if aiProvider === 'openai'}
+    <ChatGptConnection />
   {/if}
 </Modal>
 

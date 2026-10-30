@@ -1,11 +1,13 @@
 <script lang="ts">
+  import type { AiProvider } from '../types';
   import AccountMenu from './AccountMenu.svelte';
 
   type Props = {
     onLoginClick: () => void;
+    onAiClick: (provider: AiProvider) => void;
   };
 
-  let { onLoginClick }: Props = $props();
+  let { onLoginClick, onAiClick }: Props = $props();
 </script>
 
 <header>
@@ -38,7 +40,7 @@
     </div>
   </div>
 
-  <AccountMenu {onLoginClick} />
+  <AccountMenu {onLoginClick} {onAiClick} />
 </header>
 
 <style>

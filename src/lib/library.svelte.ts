@@ -1,6 +1,14 @@
 import { request } from './api';
 import { sampleReadings, shelve } from './books';
-import type { ApiBook, ApiReading, BookEdit, NewReading, ShelfBook } from './types';
+import type {
+  ApiBook,
+  ApiReading,
+  BookEdit,
+  NewReading,
+  ShelfBook,
+  SpineCandidate,
+  SpineJob,
+} from './types';
 
 /**
  * Where a reading sorts on the shelves, newest read first; one with only a year follows the dated
@@ -22,6 +30,26 @@ const photos = ({ coverUrl, coverColor, spineUrl, spineColor, spineRatio }: ApiB
 
 /** the query param that keeps a reader on the sample shelves through a reload: `?shelves=samples` */
 export const SAMPLES_QUERY = ['shelves', 'samples'] as const;
+
+/** how often a spine search or drawing running at OpenAI is looked in on, and for how long at most */
+const FOLLOW_EVERY = 3000;
+const FOLLOW_FOR = 6 * 60 * 1000;
+
+/** Waits `ms`, or rejects as soon as `signal` aborts. */
+function wait(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    signal?.throwIfAborted();
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true }
+    );
+  });
+}
 
 /** how many more times a load tries when the connection drops, waiting 1, 2, 4… s between */
 const RETRIES = 4;
@@ -156,6 +184,59 @@ class Library {
 
     const book = await request<ApiBook>(`/library/books/${this.#stored(id)}/spine`, init);
     this.#replace(book, id);
+  }
+
+  /** Has ChatGPT look for photos on the web that show the book's spine; nothing is saved. */
+  async findSpines(id: string, signal?: AbortSignal): Promise<SpineCandidate[]> {
+    const stored = this.#stored(id);
+    const started = await request<SpineJob>(`/library/books/${stored}/spine/candidates`, {
+      method: 'POST',
+      signal,
+    });
+    const done = await this.#follow(stored, started, signal);
+    return 'candidates' in done ? done.candidates : [];
+  }
+
+  /**
+   * Has ChatGPT draw the spine straight and sharp after a photo of it, one found on the web by its
+   * URL or the reader's own; it is only shown until the reader saves it with `setSpine`.
+   */
+  async drawSpine(id: string, photo: string | Blob, signal?: AbortSignal): Promise<Blob> {
+    let body: BodyInit;
+    if (typeof photo === 'string') {
+      body = JSON.stringify({ imageUrl: photo });
+    } else {
+      body = new FormData();
+      body.append('image', photo, 'spine.jpg');
+    }
+
+    const stored = this.#stored(id);
+    const started = await request<SpineJob>(`/library/books/${stored}/spine/draw`, {
+      method: 'POST',
+      body,
+      signal,
+    });
+    const done = await this.#follow(stored, started, signal);
+    if (!('image' in done)) throw new Error('ChatGPT didn’t draw a spine, try again');
+
+    const { image } = done;
+    const bytes = Uint8Array.from(atob(image), (char) => char.charCodeAt(0));
+    return new Blob([bytes], { type: 'image/png' });
+  }
+
+  /** Looks in on a search or drawing for the stored book until it is done, or `signal` aborts. */
+  async #follow(
+    stored: string,
+    job: SpineJob,
+    signal?: AbortSignal
+  ): Promise<Exclude<SpineJob, { status: 'working' }>> {
+    const until = Date.now() + FOLLOW_FOR;
+    while (job.status === 'working') {
+      if (Date.now() > until) throw new Error('ChatGPT is taking too long, try again');
+      await wait(FOLLOW_EVERY, signal);
+      job = await request<SpineJob>(`/library/books/${stored}/spine/jobs/${job.job}`, { signal });
+    }
+    return job;
   }
 
   /**

@@ -174,3 +174,33 @@ export type NewReading = {
   book: BookResult;
   read: string;
 };
+
+/** an AI service the reader can connect with their own API key */
+export type AiProvider = 'openai';
+
+/** a reader's API key as prismify tells of it: only its last four characters */
+export type AiKey = { hint: string };
+
+/** the reader's API keys by provider, null where none is connected */
+export type AiKeys = Record<AiProvider, AiKey | null>;
+
+/**
+ * a search for or drawing of a spine as it runs at OpenAI, in the background as it takes longer
+ * than a request may: still working, by its job id, or what it came to
+ */
+export type SpineJob =
+  | { status: 'working'; job: string }
+  | { status: 'done'; candidates: SpineCandidate[] }
+  | { status: 'done'; image: string };
+
+/** a photo of a book's spine ChatGPT found on the web */
+export type SpineCandidate = {
+  /** the photo on the web, sent back to draw the spine after */
+  imageUrl: string;
+  /** the page it was found on */
+  pageUrl: string;
+  /** a small copy of it as a data URL, as many sites won't show their photos elsewhere */
+  preview: string;
+  /** what the photo shows, in a few words */
+  note: string;
+};

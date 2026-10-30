@@ -2,15 +2,18 @@
   import { tick } from 'svelte';
   import { cubicOut } from 'svelte/easing';
   import { slide } from 'svelte/transition';
+  import { ai, providers } from '../ai.svelte';
   import { auth } from '../auth.svelte';
   import { library } from '../library.svelte';
   import { theme, themes } from '../theme.svelte';
+  import type { AiProvider } from '../types';
 
   type Props = {
     onLoginClick: () => void;
+    onAiClick: (provider: AiProvider) => void;
   };
 
-  let { onLoginClick }: Props = $props();
+  let { onLoginClick, onAiClick }: Props = $props();
 
   let open = $state(false);
   let root = $state<HTMLDivElement>();
@@ -98,6 +101,11 @@
   function toggleSamples() {
     hide();
     library.showingSamples = !library.showingSamples;
+  }
+
+  function openAi(provider: AiProvider) {
+    hide(false);
+    onAiClick(provider);
   }
 
   function logout() {
@@ -235,6 +243,29 @@
           </div>
         {/if}
       </div>
+
+      {#if user}
+        <div class="separator" role="separator"></div>
+
+        <p class="group" id="ai-label">AI Keys</p>
+
+        <div class="ai-keys" role="group" aria-labelledby="ai-label">
+          {#each providers as provider (provider.id)}
+            {@const connected = ai.connected(provider.id)}
+            <button
+              type="button"
+              class="item provider"
+              role="menuitem"
+              onclick={() => openAi(provider.id)}
+            >
+              <span class="label">{provider.label}</span>
+              <span class="state" class:connected>
+                {connected ? 'Connected' : 'Connect'}
+              </span>
+            </button>
+          {/each}
+        </div>
+      {/if}
 
       {#if user || auth.status === 'unauthenticated'}
         <div class="separator" role="separator"></div>
@@ -586,6 +617,48 @@
     height: 1px;
     margin: 6px 4px;
     background: #3a2934;
+  }
+
+  /* one service to a row, unlike the themes above */
+  .menu > div.ai-keys {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .provider {
+    font-family: inherit;
+    font-size: 16px;
+  }
+
+  .provider .label {
+    flex: 1;
+  }
+
+  .state {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--caps);
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  /* lit like the chosen theme's check, from the left torch */
+  .state.connected {
+    color: var(--light-a-2);
+  }
+
+  .state.connected::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--light-a-2);
+    box-shadow: 0 0 8px var(--light-a-2);
   }
 
   .action {
