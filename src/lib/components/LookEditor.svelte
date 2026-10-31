@@ -9,7 +9,7 @@
   import type { Book, EditionCover } from '../types';
   import PageBar from './PageBar.svelte';
   import Pill from './Pill.svelte';
-  import SpinePicker from './SpinePicker.svelte';
+  import PhotoPicker from './PhotoPicker.svelte';
 
   type Props = {
     book: Book;
@@ -26,7 +26,7 @@
   let view = $state.raw<
     'look' | 'editions' | { spine: 'find' | 'improve' | File | 'resume' } | { cover: 'find' }
   >(spineJob.saved()?.book === untrack(() => book.id) ? { spine: 'resume' } : 'look');
-  let spinePicker = $state<SpinePicker>();
+  let photoPicker = $state<PhotoPicker>();
 
   let savingCover = $state(false);
   let savingSpine = $state(false);
@@ -44,7 +44,7 @@
 
   /** Goes up a level, as the button in the top corner does, and out of here from the top. */
   export function back() {
-    if (typeof view === 'object') spinePicker?.back();
+    if (typeof view === 'object') photoPicker?.back();
     else if (view === 'editions') closeEditions();
     else if (!busy) onClose();
   }
@@ -197,8 +197,8 @@
 {/snippet}
 
 {#if typeof view === 'object'}
-  <SpinePicker
-    bind:this={spinePicker}
+  <PhotoPicker
+    bind:this={photoPicker}
     {book}
     part={'cover' in view ? 'cover' : 'spine'}
     start={'cover' in view ? view.cover : view.spine}

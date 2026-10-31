@@ -198,8 +198,8 @@ export type SpineJob =
     }
   | { status: 'done'; image: string };
 
-/** a photo of a book image search found on the web, to crop its spine out of */
-export type SpineCandidate = {
+/** a photo of a book image search found on the web, to crop its spine or cover out of */
+export type PhotoCandidate = {
   /** the photo on the web */
   imageUrl: string;
   /** the page it was found on */

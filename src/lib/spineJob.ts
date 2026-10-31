@@ -9,7 +9,7 @@ export type SavedSpineJob = {
   job: string;
   /** when it started, so the clock and the time it is given carry on */
   startedAt: number;
-  /** the spine on the shelf it is drawn after, by its URL; left out for a crop of a photo */
+  /** the spine on the shelf it is drawn after, by its URL, or 'invent' for one made up; left out for a crop of a photo */
   from?: string;
 };
 

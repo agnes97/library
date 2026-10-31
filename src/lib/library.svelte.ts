@@ -6,7 +6,7 @@ import type {
   BookEdit,
   NewReading,
   ShelfBook,
-  SpineCandidate,
+  PhotoCandidate,
   SpineJob,
 } from './types';
 
@@ -196,8 +196,8 @@ class Library {
     id: string,
     round: number,
     signal?: AbortSignal
-  ): Promise<{ candidates: SpineCandidate[]; more: boolean }> {
-    const { candidates, more } = await request<{ candidates: SpineCandidate[]; more?: boolean }>(
+  ): Promise<{ candidates: PhotoCandidate[]; more: boolean }> {
+    const { candidates, more } = await request<{ candidates: PhotoCandidate[]; more?: boolean }>(
       `/library/books/${this.#stored(id)}/spine/candidates?round=${round}`,
       { signal }
     );
@@ -213,7 +213,7 @@ class Library {
     id: string,
     round: number,
     signal?: AbortSignal
-  ): Promise<{ candidates: SpineCandidate[]; more: boolean }> {
+  ): Promise<{ candidates: PhotoCandidate[]; more: boolean }> {
     return request(`/library/books/${this.#stored(id)}/cover/candidates?round=${round}`, {
       signal,
     });
@@ -223,9 +223,9 @@ class Library {
    * A photo found on the web, fetched through prismify as most sites won't let the library read
    * theirs, or the image search's own small copy when the site turns prismify away too.
    */
-  async spinePhoto({ imageUrl, preview }: SpineCandidate, signal?: AbortSignal): Promise<Blob> {
+  async foundPhoto({ imageUrl, preview }: PhotoCandidate, signal?: AbortSignal): Promise<Blob> {
     const fetchPhoto = (url: string) =>
-      requestBlob(`/library/spine-photo?${new URLSearchParams({ url })}`, { signal });
+      requestBlob(`/library/photo?${new URLSearchParams({ url })}`, { signal });
     try {
       return await fetchPhoto(imageUrl);
     } catch (failure) {
@@ -256,6 +256,23 @@ class Library {
     const started = await request<SpineJob>(`/library/books/${stored}/spine/draw`, {
       method: 'POST',
       body,
+      signal,
+    });
+    return this.followDrawing(id, started, Date.now(), signal, onProgress);
+  }
+
+  /**
+   * Has ChatGPT invent the spine where no photo of it turns up, after the book's cover and the
+   * spines and covers of its series; it is only shown until the reader saves it with `setSpine`.
+   */
+  async inventSpine(
+    id: string,
+    signal?: AbortSignal,
+    onProgress?: (progress: SpineProgress) => void
+  ): Promise<Blob> {
+    const stored = this.#stored(id);
+    const started = await request<SpineJob>(`/library/books/${stored}/spine/invent`, {
+      method: 'POST',
       signal,
     });
     return this.followDrawing(id, started, Date.now(), signal, onProgress);

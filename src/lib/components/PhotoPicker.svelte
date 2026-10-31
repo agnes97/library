@@ -5,7 +5,7 @@
   import { library, type SpineProgress } from '../library.svelte';
   import { cropPhoto, drawTurned, loadPhoto, WHOLE, type Crop } from '../photo';
   import { spineJob } from '../spineJob';
-  import type { Book, SpineCandidate } from '../types';
+  import type { Book, PhotoCandidate } from '../types';
   import PageBar from './PageBar.svelte';
   import Pill from './Pill.svelte';
 
@@ -29,12 +29,14 @@
   const SPINE_SHAPE = 0.4;
   /** a drag shorter than this share of the photo is a click, not a crop */
   const MIN_DRAG = 0.02;
-  /** how tall the spine shows beside the photo, at most, as on the shelf */
-  const PREVIEW_HEIGHT = 200;
+  /** how tall the spine shows beside the photo, at most, as on the shelf, and a cover, smaller */
+  const PREVIEW_HEIGHT = { spine: 200, cover: 150 };
   /** between the photo and the spine beside it, as in the styles below */
   const GAP = 16;
-  /** between the turn button and the photo below it, as in the styles below */
+  /** between the turn button and the photo below it, and the label and the result, as in the styles below */
   const BAR_GAP = 6;
+  /** what a spine ChatGPT invented is drawn from, in place of a photo's URL or crop */
+  const INVENTED = 'invent';
 
   /** the photo being cropped */
   let photo = $state.raw<ImageBitmap | null>(null);
@@ -44,29 +46,33 @@
   let saving = $state(false);
   let error = $state<string | null>(null);
   /** photos of the book found on the web, all shown at once for the reader to pick from */
-  let found = $state.raw<SpineCandidate[] | null>(null);
+  let found = $state.raw<PhotoCandidate[] | null>(null);
   /** the round of searching done last, each looking the book up in other ways */
   let round = -1;
   /** whether searching again would look in another way */
   let more = $state(false);
   /** the first photo the last search again added, scrolled to */
-  let added = $state.raw<SpineCandidate | null>(null);
+  let added = $state.raw<PhotoCandidate | null>(null);
   /** a search again that turned up nothing new */
   let nothingNew = $state(false);
   /** the found photo last opened to crop, marked among the others on going back to them */
-  let picked = $state.raw<SpineCandidate | null>(null);
+  let picked = $state.raw<PhotoCandidate | null>(null);
   /** found photos whose small copy won't show, which drop out of the grid */
   const broken = new SvelteSet<string>();
-  /** the spine ChatGPT drew, shown until it is saved or let go */
+  /** the spine ChatGPT drew, shown until it is saved or let go; `from` is INVENTED for one it made up */
   let drawn = $state.raw<{ blob: Blob; url: string; from?: string | Blob } | null>(null);
   /** what is under way: searching, fetching a found photo, or ChatGPT drawing, which can take a minute */
   let working = $state<'finding' | 'opening' | 'drawing' | null>(null);
+  /** the drawing under way makes the spine up rather than drawing it after a photo */
+  let inventing = $state(false);
   /** the step it is on, as OpenAI last told */
   let progress = $state.raw<SpineProgress | null>(null);
   /** when it started, and the clock ticking along beside it */
   let startedAt = $state(0);
   let now = $state(0);
   const busy = $derived(saving || working !== null);
+  /** once the web has no more photos to search, ChatGPT can make the spine up instead */
+  const canInvent = $derived(part === 'spine' && !more && ai.connected('openai'));
   /** stops whatever is under way once the picker closes */
   const closing = new AbortController();
   /** stops the search or drawing under way when the reader gives up on it */
@@ -75,12 +81,14 @@
   /** the room for the photo and the spine beside it */
   let roomWidth = $state(0);
   let roomHeight = $state(0);
-  /** the turn button's height above the photo */
+  /** the turn button's height above the photo, and the label's above the result */
   let barHeight = $state(0);
 
   /** the photo as it shows, turned and small enough to draw on every drag */
   const stage = $derived(photo ? drawTurned(photo, turns, WHOLE, STAGE_SIDE) : null);
-  const previewHeight = $derived(Math.min(PREVIEW_HEIGHT, roomHeight));
+  const previewHeight = $derived(
+    Math.max(0, Math.min(PREVIEW_HEIGHT[part], roomHeight - barHeight - BAR_GAP))
+  );
   const previewWidth = $derived(
     stage
       ? Math.min(
@@ -144,7 +152,7 @@
     if (working === 'finding') return 'Searching the web for photos of it';
     if (working === 'opening') return 'Fetching the photo';
     if (!progress || progress.queued) return 'Waiting for ChatGPT to start';
-    return 'Drawing the spine straight and sharp';
+    return inventing ? 'Inventing the spine after its cover' : 'Drawing the spine straight and sharp';
   });
 
   const elapsed = $derived.by(() => {
@@ -200,7 +208,7 @@
     nothingNew = false;
     try {
       const shown = new Set(found?.map(({ imageUrl }) => imageUrl));
-      let fresh: SpineCandidate[] = [];
+      let fresh: PhotoCandidate[] = [];
       do {
         const result =
           part === 'cover'
@@ -223,11 +231,11 @@
   }
 
   /** Opens a found photo to crop its spine or cover out of. */
-  async function pick(candidate: SpineCandidate) {
+  async function pick(candidate: PhotoCandidate) {
     if (busy) return;
     const signal = begin('opening');
     try {
-      const blob = await library.spinePhoto(candidate, signal);
+      const blob = await library.foundPhoto(candidate, signal);
       if (signal.aborted) return;
       await open(blob);
       picked = candidate;
@@ -251,6 +259,7 @@
     if (busy) return;
     const signal = begin('drawing');
     startedAt = now = since;
+    inventing = from === INVENTED;
     try {
       const blob = await run(signal, (job) => {
         progress = job;
@@ -275,10 +284,15 @@
     }
   }
 
-  /** Has ChatGPT draw the spine after one on the shelf, by its URL, or a crop of a photo. */
+  /**
+   * Has ChatGPT draw the spine after one on the shelf, by its URL, or a crop of a photo, or invent
+   * it after the cover and the series when `from` is INVENTED.
+   */
   function draw(from: string | Blob) {
     return drawing(from, (signal, onProgress) =>
-      library.drawSpine(book.id, from, signal, onProgress)
+      from === INVENTED
+        ? library.inventSpine(book.id, signal, onProgress)
+        : library.drawSpine(book.id, from, signal, onProgress)
     );
   }
 
@@ -444,7 +458,7 @@
   });
 </script>
 
-<div class="spine-picker" role="group" aria-label="Photo of the {part}" aria-busy={working !== null}>
+<div class="photo-picker" role="group" aria-label="Photo of the {part}" aria-busy={working !== null}>
   <PageBar
     title={heading}
     cancel={!!drawn || (!!stage && !found)}
@@ -481,13 +495,19 @@
         </ul>
         <p class="hint">
           {nothingNew
-            ? 'No other photos turned up. Pick one of these, or photograph your own copy.'
+            ? `No other photos turned up. Pick one of these, ${canInvent ? 'have ChatGPT invent it, ' : ''}or photograph your own copy.`
             : more
               ? `Pick the one that shows its ${part} best, to crop it out, or search for others.`
-              : `Pick the one that shows its ${part} best, to crop it out.`}
+              : canInvent
+                ? `Pick the one that shows its ${part} best, to crop it out, or have ChatGPT invent it.`
+                : `Pick the one that shows its ${part} best, to crop it out.`}
         </p>
       {:else}
-        <p class="hint">None turned up. Photograph your own copy instead.</p>
+        <p class="hint">
+          {canInvent
+            ? 'None turned up. Have ChatGPT invent it, or photograph your own copy.'
+            : 'None turned up. Photograph your own copy instead.'}
+        </p>
       {/if}
     </div>
   {/if}
@@ -507,6 +527,7 @@
             disabled={busy}
             onclick={turn}
           />
+          <span class="label">Suggestion</span>
         </div>
         <div
           class="stage"
@@ -523,15 +544,22 @@
           ></span>
         </div>
       </div>
-      <canvas
-        {@attach showPreview}
-        class="preview"
-        style:width="{previewWidth}px"
-        style:height="{previewHeight}px"
-        aria-label={part === 'cover'
-          ? 'The cover as it will show'
-          : 'The spine as it will stand on the shelf'}
-      ></canvas>
+      <!-- as tall as the photo beside it, so the labels line up along the top -->
+      <div
+        class="result"
+        style:height="{barHeight + BAR_GAP + Math.max(0, stage.height * stageScale)}px"
+      >
+        <span class="label" style:height="{barHeight}px">Final</span>
+        <canvas
+          {@attach showPreview}
+          class="preview"
+          style:width="{previewWidth}px"
+          style:height="{previewHeight}px"
+          aria-label={part === 'cover'
+            ? 'The cover as it will show'
+            : 'The spine as it will stand on the shelf'}
+        ></canvas>
+      </div>
     </div>
     <p class="hint">
       {part === 'spine' && ai.connected('openai')
@@ -583,12 +611,26 @@
         </Pill>
       {:else if found}
         {#if more}
-          <Pill disabled={busy} onclick={find}>
-            {working === 'finding' ? 'Searching…' : 'Search other photos'}
+          <Pill title="Search the web for other photos of it" disabled={busy} onclick={find}>
+            {working === 'finding' ? 'Searching…' : 'More photos'}
+          </Pill>
+        {:else if canInvent}
+          <Pill
+            icon="sparkle"
+            title="Have ChatGPT invent the spine after its cover and the rest of its series"
+            disabled={busy}
+            onclick={() => draw(INVENTED)}
+          >
+            {working === 'drawing' ? 'Inventing…' : 'Invent'}
           </Pill>
         {/if}
-        <Pill icon="upload" disabled={busy} onclick={() => photoInput?.click()}>
-          Upload your own
+        <Pill
+          icon="upload"
+          title="Upload your own photo"
+          disabled={busy}
+          onclick={() => photoInput?.click()}
+        >
+          Upload
         </Pill>
       {:else if error && !working}
         <Pill disabled={busy} onclick={retry}>
@@ -614,7 +656,7 @@
 
 <style>
   /* laid over the first page, like the cover and spine page */
-  .spine-picker {
+  .photo-picker {
     position: absolute;
     inset: 0;
     z-index: 1;
@@ -629,7 +671,7 @@
   }
 
   @media (width < 700px) {
-    .spine-picker {
+    .photo-picker {
       gap: 10px;
       padding: 14px 16px 12px;
     }
@@ -793,12 +835,34 @@
     gap: 16px;
   }
 
-  .photo {
+  .photo,
+  .result {
     flex: none;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 6px;
+  }
+
+  .result {
+    align-items: center;
+  }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* which is the photo to crop and which is what gets saved */
+  .label {
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.7;
   }
 
   /* the crop is laid over the photo in shares of its size */
@@ -819,6 +883,8 @@
   .crop {
     position: absolute;
     outline: 2px dashed var(--paper);
+    /* inside the crop, so a whole cover shows selected too */
+    outline-offset: -2px;
     box-shadow: 0 0 0 100vmax rgb(20 10 14 / 0.55);
     pointer-events: none;
   }
@@ -843,10 +909,20 @@
     margin-top: auto;
   }
 
+  /* always on one line, however many there are */
   .choices {
     display: flex;
-    flex-wrap: wrap;
     justify-content: center;
     gap: 8px;
+  }
+
+  @media (width < 700px) {
+    .choices {
+      gap: 6px;
+    }
+
+    .choices :global(.pill) {
+      padding-inline: 12px;
+    }
   }
 </style>
