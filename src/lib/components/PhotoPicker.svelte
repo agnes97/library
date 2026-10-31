@@ -6,6 +6,7 @@
   import { cropPhoto, drawTurned, loadPhoto, WHOLE, type Crop } from '../photo';
   import { spineJob } from '../spineJob';
   import type { Book, PhotoCandidate } from '../types';
+  import Icon from './Icon.svelte';
   import PageBar from './PageBar.svelte';
   import Pill from './Pill.svelte';
 
@@ -71,8 +72,8 @@
   let startedAt = $state(0);
   let now = $state(0);
   const busy = $derived(saving || working !== null);
-  /** once the web has no more photos to search, ChatGPT can make the spine up instead */
-  const canInvent = $derived(part === 'spine' && !more && ai.connected('openai'));
+  /** where no photo found shows it well, ChatGPT can make the spine up instead */
+  const canInvent = $derived(part === 'spine' && ai.connected('openai'));
   /** stops whatever is under way once the picker closes */
   const closing = new AbortController();
   /** stops the search or drawing under way when the reader gives up on it */
@@ -496,11 +497,13 @@
         <p class="hint">
           {nothingNew
             ? `No other photos turned up. Pick one of these, ${canInvent ? 'have ChatGPT invent it, ' : ''}or photograph your own copy.`
-            : more
-              ? `Pick the one that shows its ${part} best, to crop it out, or search for others.`
-              : canInvent
-                ? `Pick the one that shows its ${part} best, to crop it out, or have ChatGPT invent it.`
-                : `Pick the one that shows its ${part} best, to crop it out.`}
+            : more && canInvent
+              ? `Pick the one that shows its ${part} best, to crop it out, search for others, or have ChatGPT invent it.`
+              : more
+                ? `Pick the one that shows its ${part} best, to crop it out, or search for others.`
+                : canInvent
+                  ? `Pick the one that shows its ${part} best, to crop it out, or have ChatGPT invent it.`
+                  : `Pick the one that shows its ${part} best, to crop it out.`}
         </p>
       {:else}
         <p class="hint">
@@ -520,14 +523,17 @@
       <!-- the turn button sits over the photo's top left corner -->
       <div class="photo">
         <div class="bar" bind:clientHeight={barHeight}>
-          <Pill
-            icon="turn"
-            aria-label="Turn the photo"
+          <button
+            type="button"
+            class="turn"
             title="Turn the photo"
             disabled={busy}
             onclick={turn}
-          />
-          <span class="label">Suggestion</span>
+          >
+            <Icon name="turn" size={16} />
+            Turn
+          </button>
+          <span class="label divided">Suggestion</span>
         </div>
         <div
           class="stage"
@@ -614,7 +620,8 @@
           <Pill title="Search the web for other photos of it" disabled={busy} onclick={find}>
             {working === 'finding' ? 'Searching…' : 'More photos'}
           </Pill>
-        {:else if canInvent}
+        {/if}
+        {#if canInvent}
           <Pill
             icon="sparkle"
             title="Have ChatGPT invent the spine after its cover and the rest of its series"
@@ -852,6 +859,43 @@
     display: flex;
     align-items: center;
     gap: 8px;
+  }
+
+  /* bare words before the label, set off from it by a line */
+  .turn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 0;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: var(--paper-muted);
+    cursor: pointer;
+  }
+
+  .turn:hover:not(:disabled) {
+    color: var(--paper-title);
+  }
+
+  .turn:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
+
+  .turn:focus-visible {
+    outline: 2px solid var(--paper-accent);
+    outline-offset: 2px;
+  }
+
+  .divided {
+    padding-left: 8px;
+    border-left: 1px solid rgb(107 74 88 / 0.35);
   }
 
   /* which is the photo to crop and which is what gets saved */

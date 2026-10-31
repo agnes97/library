@@ -307,9 +307,9 @@ export const sampleReadings: ApiReading[] = [
       'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL17352669W-fd86ed1158e6.webp',
     coverColor: '#ed394d',
     spineUrl:
-      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL17352669W-3b1745090a81.webp',
-    spineColor: '#cb323c',
-    spineRatio: 0.136,
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL17352669W-73b6a725c3bb.webp',
+    spineColor: '#ed3445',
+    spineRatio: 0.152,
     description:
       "When nineteen-year-old huntress Feyre kills a wolf in the woods, a terrifying creature arrives to demand retribution. Dragged to a treacherous magical land she knows about only from legends, Feyre discovers that her captor is not truly a beast, but one of the lethal, immortal faeries who once ruled her world.\r\n\r\nAt least, he's not a beast all the time.\r\n\r\nAs she adapts to her new home, her feelings for the faerie, Tamlin, transform from icy hostility into a fiery passion that burns through every lie she's been told about the beautiful, dangerous world of the Fae. But something is not right in the faerie lands. An ancient, wicked shadow is growing, and Feyre must find a way to stop it, or doom Tamlin-and his world-forever.",
     series: 'ACOTAR',
@@ -323,9 +323,9 @@ export const sampleReadings: ApiReading[] = [
       'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/covers/OL17837119W-289a255723ea.webp',
     coverColor: '#fafafa',
     spineUrl:
-      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL17837119W-7eacbfbe7946.webp',
-    spineColor: '#e9e7e3',
-    spineRatio: 0.089,
+      'https://3cfeg5qp8r4g3blg.public.blob.vercel-storage.com/library/spines/OL17837119W-90facf30cac7.webp',
+    spineColor: '#fdfdfd',
+    spineRatio: 0.164,
     description:
       'An antidote to chaos in twelve rules, from standing up straight with your shoulders back to petting a cat when you meet one on the street.',
   }),
