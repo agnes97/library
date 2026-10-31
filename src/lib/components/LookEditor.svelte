@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import { ai } from '../ai.svelte';
   import { library } from '../library.svelte';
   import { editionCovers } from '../openLibrary';
   import { shrinkPhoto } from '../photo';
+  import { spineJob } from '../spineJob';
   import type { Book, EditionCover } from '../types';
   import PageBar from './PageBar.svelte';
   import Pill from './Pill.svelte';
@@ -17,10 +19,13 @@
   let { book, onClose }: Props = $props();
 
   /**
-   * the cover and spine side by side, the editions' covers to choose from, or the spine being
-   * found, drawn or cropped from what the reader chose for it
+   * the cover and spine side by side, the editions' covers to choose from, the spine being
+   * found, drawn or cropped from what the reader chose for it, as a drawing still under way before
+   * the page reloaded is, or the cover being found on the web and cropped
    */
-  let view = $state.raw<'look' | 'editions' | { spine: 'find' | 'improve' | File }>('look');
+  let view = $state.raw<
+    'look' | 'editions' | { spine: 'find' | 'improve' | File | 'resume' } | { cover: 'find' }
+  >(spineJob.saved()?.book === untrack(() => book.id) ? { spine: 'resume' } : 'look');
   let spinePicker = $state<SpinePicker>();
 
   let savingCover = $state(false);
@@ -148,6 +153,12 @@
     view = { spine: start };
   }
 
+  function findCover() {
+    if (busy) return;
+    error = null;
+    view = { cover: 'find' };
+  }
+
   /** Runs `then` with the photo the reader picks in `input`, if they pick one. */
   function onPhoto(then: (file: File) => void) {
     return (event: Event & { currentTarget: HTMLInputElement }) => {
@@ -189,7 +200,8 @@
   <SpinePicker
     bind:this={spinePicker}
     {book}
-    start={view.spine}
+    part={'cover' in view ? 'cover' : 'spine'}
+    start={'cover' in view ? view.cover : view.spine}
     onClose={() => (view = 'look')}
   />
 {:else if view === 'editions'}
@@ -316,6 +328,15 @@
         </Pill>
         <Pill wide icon="upload" disabled={busy} onclick={() => coverInput?.click()}>
           {savingCover ? 'Saving…' : 'Upload your own'}
+        </Pill>
+        <Pill
+          wide
+          icon="search"
+          title="Search the web for photos of its cover"
+          disabled={busy}
+          onclick={findCover}
+        >
+          Search the web
         </Pill>
         <Pill wide icon="editions" disabled={busy} onclick={openEditions}>
           Pick from editions

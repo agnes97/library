@@ -1,8 +1,10 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { ai, providers } from './lib/ai.svelte';
   import { auth } from './lib/auth.svelte';
   import { shelfDecor } from './lib/books';
   import { library, SAMPLES_QUERY } from './lib/library.svelte';
+  import { spineJob } from './lib/spineJob';
   import type { AiProvider, ShelfBook } from './lib/types';
   import AddBookForm from './lib/components/AddBookForm.svelte';
   import Backdrop from './lib/components/Backdrop.svelte';
@@ -32,6 +34,15 @@
   const readings = $derived(sampling ? library.samples : library.readings);
   let selected = $state.raw<{ reading: ShelfBook; spine: HTMLElement } | null>(null);
   /**
+   * the query param that keeps a book open through a reload, by its reading's key, as when the
+   * browser drops a tab left in the background: `?book=…`
+   */
+  const BOOK_QUERY = 'book';
+  /** the book open before the page reloaded, until it opens again or turns out to be gone */
+  let reopening = $state(new URLSearchParams(location.search).get(BOOK_QUERY));
+  /** the shelves are as they will stay, so a book not on them isn't coming */
+  const shelved = $derived(sampling || (auth.isAuthenticated && library.status !== 'loading'));
+  /**
    * the open book as it is now on the shelves, so a correction shows at once; one just removed
    * stays open as it was while it fades away
    */
@@ -51,13 +62,34 @@
     }
   });
 
-  // the address says when the samples are showing, so a reload keeps them
+  // the address says when the samples are showing and which book is open, so a reload keeps them
   $effect(() => {
     const url = new URL(location.href);
     const [key, value] = SAMPLES_QUERY;
     if (library.showingSamples) url.searchParams.set(key, value);
     else url.searchParams.delete(key);
+    const open = selected?.reading.key ?? reopening;
+    if (open) url.searchParams.set(BOOK_QUERY, open);
+    else url.searchParams.delete(BOOK_QUERY);
     if (url.href !== location.href) history.replaceState(history.state, '', url);
+  });
+
+  // the book open before a reload flies out of its spine again once the shelves hold it
+  $effect(() => {
+    const key = reopening;
+    if (!key) return;
+    const reading = readings.find((item) => item.key === key);
+    if (reading) {
+      tick().then(() => {
+        reopening = null;
+        const spine = document.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`);
+        if (spine && !selected) select(reading, spine);
+      });
+    } else if (shelved) {
+      reopening = null;
+      // and a drawing for it has nothing left to show in
+      spineJob.forget();
+    }
   });
 
   /** a load lost to a dropped connection is tried again once the reader is back */

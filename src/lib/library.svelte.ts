@@ -187,13 +187,36 @@ class Library {
     this.#replace(book, id);
   }
 
-  /** Looks for photos of the book on the web, to crop its spine out of; nothing is saved. */
-  async findSpines(id: string, signal?: AbortSignal): Promise<SpineCandidate[]> {
-    const { candidates } = await request<{ candidates: SpineCandidate[] }>(
-      `/library/books/${this.#stored(id)}/spine/candidates`,
+  /**
+   * Looks for photos of the book on the web, to crop its spine out of, in a `round` of searching
+   * that looks it up in other ways than the rounds before, and whether another round would look
+   * again; nothing is saved.
+   */
+  async findSpines(
+    id: string,
+    round: number,
+    signal?: AbortSignal
+  ): Promise<{ candidates: SpineCandidate[]; more: boolean }> {
+    const { candidates, more } = await request<{ candidates: SpineCandidate[]; more?: boolean }>(
+      `/library/books/${this.#stored(id)}/spine/candidates?round=${round}`,
       { signal }
     );
-    return candidates;
+    // a prismify from before it searched in rounds leaves it out
+    return { candidates, more: more ?? false };
+  }
+
+  /**
+   * Looks for photos of the book's cover on the web, to crop it out of, in rounds as for its
+   * spine; nothing is saved.
+   */
+  async findCovers(
+    id: string,
+    round: number,
+    signal?: AbortSignal
+  ): Promise<{ candidates: SpineCandidate[]; more: boolean }> {
+    return request(`/library/books/${this.#stored(id)}/cover/candidates?round=${round}`, {
+      signal,
+    });
   }
 
   /**
@@ -235,27 +258,45 @@ class Library {
       body,
       signal,
     });
-    const { image } = await this.#follow(stored, started, signal, onProgress);
+    return this.followDrawing(id, started, Date.now(), signal, onProgress);
+  }
+
+  /**
+   * Follows a drawing already started at `since`, as one picked up again after a reload, by its
+   * job, through to the spine it drew.
+   */
+  async followDrawing(
+    id: string,
+    job: SpineJob,
+    since: number,
+    signal?: AbortSignal,
+    onProgress?: (progress: SpineProgress) => void
+  ): Promise<Blob> {
+    const { image } = await this.#follow(this.#stored(id), job, since, signal, onProgress);
     const bytes = Uint8Array.from(atob(image), (char) => char.charCodeAt(0));
     return new Blob([bytes], { type: 'image/png' });
   }
 
   /**
-   * Looks in on a drawing for the stored book until it is done, or `signal` aborts,
-   * telling `onProgress` how it stands each time.
+   * Looks in on a drawing for the stored book, started at `since`, until it is done, or `signal`
+   * aborts, telling `onProgress` how it stands each time.
    */
   async #follow(
     stored: string,
     job: SpineJob,
+    since: number,
     signal?: AbortSignal,
     onProgress?: (progress: SpineProgress) => void
   ): Promise<Exclude<SpineJob, { status: 'working' }>> {
-    const until = Date.now() + FOLLOW_FOR;
+    const until = since + FOLLOW_FOR;
     while (job.status === 'working') {
       onProgress?.(job);
-      if (Date.now() > until) throw new Error('ChatGPT is taking too long, try again');
       await wait(FOLLOW_EVERY, signal);
       job = await request<SpineJob>(`/library/books/${stored}/spine/jobs/${job.job}`, { signal });
+      // a drawing picked up long after it began may well be done by now, so it is looked in on first
+      if (job.status === 'working' && Date.now() > until) {
+        throw new Error('ChatGPT is taking too long, try again');
+      }
     }
     return job;
   }

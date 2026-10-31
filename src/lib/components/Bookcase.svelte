@@ -495,6 +495,7 @@
           {width}
           {height}
           flat
+          key={volume.key}
           arrive={arrival.get(volume.key)}
           onSelect={(spine) => onSelect(volume, spine)}
         />
@@ -507,6 +508,7 @@
       {width}
       {height}
       {lean}
+      key={item.key}
       arrive={arrival.get(item.key)}
       onSelect={(spine) => onSelect(item, spine)}
     />

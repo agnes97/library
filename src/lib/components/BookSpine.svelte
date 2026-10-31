@@ -4,6 +4,8 @@
 
   type Props = {
     book: Book;
+    /** the reading's key, for the book reopened after a reload to find its spine by */
+    key: string;
     width: number;
     height: number;
     /** tip back onto the book before it, standing this many px off it */
@@ -16,7 +18,7 @@
     arrive?: number;
   };
 
-  let { book, width, height, lean, flat = false, onSelect, arrive }: Props = $props();
+  let { book, key, width, height, lean, flat = false, onSelect, arrive }: Props = $props();
 
   /** a spine photo that failed to load, so the cloth one shows instead */
   let brokenPhoto = $state<string>();
@@ -32,6 +34,7 @@
   type="button"
   class={['spine', { lean: lean !== undefined, flat, photo, arriving: arrive !== undefined }]}
   aria-label="{book.title} by {book.author}"
+  data-key={key}
   style:--w="{width}px"
   style:--h="{height}px"
   style:--lean={lean === undefined ? undefined : `${lean}px`}

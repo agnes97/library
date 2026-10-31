@@ -4,18 +4,24 @@
   import { ai } from '../ai.svelte';
   import { library, type SpineProgress } from '../library.svelte';
   import { cropPhoto, drawTurned, loadPhoto, WHOLE, type Crop } from '../photo';
+  import { spineJob } from '../spineJob';
   import type { Book, SpineCandidate } from '../types';
   import PageBar from './PageBar.svelte';
   import Pill from './Pill.svelte';
 
   type Props = {
     book: Book;
-    /** what the reader chose: finding photos of it on the web, ChatGPT redrawing the current one, or their own photo */
-    start: 'find' | 'improve' | File;
+    /** what is cropped out of the photo: the spine, or the cover, which ChatGPT doesn't draw */
+    part?: 'spine' | 'cover';
+    /**
+     * what the reader chose: finding photos of it on the web, ChatGPT redrawing the current one,
+     * or their own photo; or picking up the drawing under way before the page reloaded
+     */
+    start: 'find' | 'improve' | File | 'resume';
     onClose: () => void;
   };
 
-  let { book, start, onClose }: Props = $props();
+  let { book, part = 'spine', start, onClose }: Props = $props();
 
   /** the photo shown for cropping is drawn no bigger than this */
   const STAGE_SIDE = 1000;
@@ -27,6 +33,8 @@
   const PREVIEW_HEIGHT = 200;
   /** between the photo and the spine beside it, as in the styles below */
   const GAP = 16;
+  /** between the turn button and the photo below it, as in the styles below */
+  const BAR_GAP = 6;
 
   /** the photo being cropped */
   let photo = $state.raw<ImageBitmap | null>(null);
@@ -37,12 +45,20 @@
   let error = $state<string | null>(null);
   /** photos of the book found on the web, all shown at once for the reader to pick from */
   let found = $state.raw<SpineCandidate[] | null>(null);
+  /** the round of searching done last, each looking the book up in other ways */
+  let round = -1;
+  /** whether searching again would look in another way */
+  let more = $state(false);
+  /** the first photo the last search again added, scrolled to */
+  let added = $state.raw<SpineCandidate | null>(null);
+  /** a search again that turned up nothing new */
+  let nothingNew = $state(false);
   /** the found photo last opened to crop, marked among the others on going back to them */
   let picked = $state.raw<SpineCandidate | null>(null);
   /** found photos whose small copy won't show, which drop out of the grid */
   const broken = new SvelteSet<string>();
   /** the spine ChatGPT drew, shown until it is saved or let go */
-  let drawn = $state.raw<{ blob: Blob; url: string; from: string | Blob } | null>(null);
+  let drawn = $state.raw<{ blob: Blob; url: string; from?: string | Blob } | null>(null);
   /** what is under way: searching, fetching a found photo, or ChatGPT drawing, which can take a minute */
   let working = $state<'finding' | 'opening' | 'drawing' | null>(null);
   /** the step it is on, as OpenAI last told */
@@ -59,6 +75,8 @@
   /** the room for the photo and the spine beside it */
   let roomWidth = $state(0);
   let roomHeight = $state(0);
+  /** the turn button's height above the photo */
+  let barHeight = $state(0);
 
   /** the photo as it shows, turned and small enough to draw on every drag */
   const stage = $derived(photo ? drawTurned(photo, turns, WHOLE, STAGE_SIDE) : null);
@@ -77,18 +95,18 @@
       ? Math.min(
           1,
           (roomWidth - previewWidth - GAP) / stage.width,
-          roomHeight / stage.height
+          (roomHeight - barHeight - BAR_GAP) / stage.height
         )
       : 0
   );
 
   const heading = $derived.by(() => {
     if (drawn) return 'The spine ChatGPT drew';
-    if (stage) return 'Drag around the spine';
-    if (found) return found.length > 0 ? 'Pick a photo of its spine' : 'No photo of its spine';
-    if (start === 'find') return 'Finding its spine';
-    if (start === 'improve') return 'Improving its spine';
-    return 'Photo of the spine';
+    if (stage) return `Drag around the ${part}`;
+    if (found) return found.length > 0 ? `Pick a photo of its ${part}` : `No photo of its ${part}`;
+    if (start === 'find') return `Finding its ${part}`;
+    if (start === 'improve' || start === 'resume') return 'Improving its spine';
+    return `Photo of the ${part}`;
   });
 
   // the photo goes when it is replaced or the picker closes
@@ -97,7 +115,11 @@
     return () => current?.close();
   });
 
-  $effect(() => () => closing.abort());
+  // the drawing is kept for a reload only while this is open
+  $effect(() => () => {
+    closing.abort();
+    if (part === 'spine') spineJob.forget();
+  });
 
   // the elapsed time counts up while it works
   $effect(() => {
@@ -159,18 +181,39 @@
    */
   export function back() {
     if (saving) return;
-    if (drawn && (found || stage)) drawn = null;
-    else if (stage && found) {
+    if (drawn && (found || stage)) {
+      drawn = null;
+      spineJob.forget();
+    } else if (stage && found) {
       photo = null;
       error = null;
     } else onClose();
   }
 
+  /**
+   * Searches the web for photos of the book, or again in other ways, adding the photos not shown
+   * yet below the others; a round that adds none goes straight on to the next.
+   */
   async function find() {
     if (busy) return;
     const signal = begin('finding');
+    nothingNew = false;
     try {
-      found = await library.findSpines(book.id, signal);
+      const shown = new Set(found?.map(({ imageUrl }) => imageUrl));
+      let fresh: SpineCandidate[] = [];
+      do {
+        const result =
+          part === 'cover'
+            ? await library.findCovers(book.id, round + 1, signal)
+            : await library.findSpines(book.id, round + 1, signal);
+        round++;
+        more = result.more;
+        fresh = result.candidates.filter(({ imageUrl }) => !shown.has(imageUrl));
+      } while (fresh.length === 0 && more && !signal.aborted);
+      if (signal.aborted) return;
+      added = found && fresh.length > 0 ? fresh[0] : null;
+      nothingNew = !!found && fresh.length === 0;
+      found = [...(found ?? []), ...fresh];
     } catch (failure) {
       if (signal.aborted) return;
       error = failed(failure, 'The search failed, try again');
@@ -179,7 +222,7 @@
     }
   }
 
-  /** Opens a found photo to crop its spine out of. */
+  /** Opens a found photo to crop its spine or cover out of. */
   async function pick(candidate: SpineCandidate) {
     if (busy) return;
     const signal = begin('opening');
@@ -196,14 +239,33 @@
     }
   }
 
-  /** Has ChatGPT draw the spine after one on the shelf, by its URL, or a crop of a photo. */
-  async function draw(from: string | Blob) {
+  /**
+   * Shows ChatGPT drawing through `run`, after `from` (left out for a crop picked up after a
+   * reload), from `since` it began, and the spine it drew.
+   */
+  async function drawing(
+    from: string | Blob | undefined,
+    run: (signal: AbortSignal, onProgress: (job: SpineProgress) => void) => Promise<Blob>,
+    since = Date.now()
+  ) {
     if (busy) return;
     const signal = begin('drawing');
+    startedAt = now = since;
     try {
-      const blob = await library.drawSpine(book.id, from, signal, (job) => (progress = job));
+      const blob = await run(signal, (job) => {
+        progress = job;
+        // kept for the tab, so a reload picks the drawing up again
+        spineJob.save({
+          book: book.id,
+          job: job.job,
+          startedAt,
+          from: typeof from === 'string' ? from : undefined,
+        });
+      });
+      // still kept, so a reload before it is saved shows it again, fetched once more from OpenAI
       drawn = { blob, url: URL.createObjectURL(blob), from };
     } catch (failure) {
+      spineJob.forget();
       if (signal.aborted) return;
       error = failed(failure, 'Drawing failed, try again');
       // the key may have been let go on the server, which the menu should show
@@ -211,6 +273,28 @@
     } finally {
       end();
     }
+  }
+
+  /** Has ChatGPT draw the spine after one on the shelf, by its URL, or a crop of a photo. */
+  function draw(from: string | Blob) {
+    return drawing(from, (signal, onProgress) =>
+      library.drawSpine(book.id, from, signal, onProgress)
+    );
+  }
+
+  /** the drawing under way before the page reloaded, when that is what this picks up */
+  const resumed = untrack(() => (start === 'resume' ? spineJob.saved() : null));
+
+  /** Follows the drawing under way before the page reloaded on to the spine it draws. */
+  function resume() {
+    if (resumed?.book !== book.id) return onClose();
+    const { job, startedAt: since, from } = resumed;
+    drawing(
+      from,
+      (signal, onProgress) =>
+        library.followDrawing(book.id, { status: 'working', job }, since, signal, onProgress),
+      since
+    );
   }
 
   async function drawCrop() {
@@ -226,6 +310,7 @@
   function retry() {
     if (start === 'find') find();
     else if (start === 'improve' && book.spineUrl) draw(book.spineUrl);
+    else if (resumed?.from) draw(resumed.from);
     else photoInput?.click();
   }
 
@@ -250,11 +335,14 @@
       );
   }
 
-  /** A photo of the spine alone is taken whole; on one of a shelf it starts as a strip in the middle. */
+  /**
+   * A photo of the spine alone is taken whole; on one of a shelf it starts as a strip in the
+   * middle. A cover is taken whole, as photos of one mostly show it alone.
+   */
   function startCrop() {
     if (!stage) return;
     crop =
-      stage.width / stage.height < SPINE_SHAPE
+      part === 'cover' || stage.width / stage.height < SPINE_SHAPE
         ? WHOLE
         : { x: 0.44, y: 0.05, width: 0.12, height: 0.9 };
   }
@@ -319,6 +407,11 @@
     };
   }
 
+  /** Scrolls the grid down to the first photo a search again added. */
+  function showAdded(item: HTMLElement) {
+    item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
   /** Draws the stage's photo into the canvas on the page. */
   function showStage(canvas: HTMLCanvasElement) {
     if (!stage) return;
@@ -333,7 +426,8 @@
     error = null;
     try {
       const image = spine === 'drawn' ? drawn?.blob : photo && (await cropPhoto(photo, turns, crop));
-      if (image) await library.setSpine(book.id, image);
+      if (image && part === 'cover') await library.setCover(book.id, image);
+      else if (image) await library.setSpine(book.id, image);
       onClose();
     } catch (failure) {
       error = failed(failure, 'Saving failed, try again');
@@ -345,11 +439,12 @@
   untrack(() => {
     if (start === 'find') find();
     else if (start === 'improve') retry();
+    else if (start === 'resume') resume();
     else open(start);
   });
 </script>
 
-<div class="spine-picker" role="group" aria-label="Photo of the spine" aria-busy={working !== null}>
+<div class="spine-picker" role="group" aria-label="Photo of the {part}" aria-busy={working !== null}>
   <PageBar
     title={heading}
     cancel={!!drawn || (!!stage && !found)}
@@ -364,7 +459,7 @@
         <ul aria-label="Photos found on the web">
           {#each found as candidate (candidate.imageUrl)}
             {#if !broken.has(candidate.imageUrl)}
-              <li>
+              <li {@attach candidate === added && showAdded}>
                 <button
                   type="button"
                   class:picked={candidate === picked}
@@ -384,7 +479,13 @@
             {/if}
           {/each}
         </ul>
-        <p class="hint">Pick the one that shows its spine best, to crop it out.</p>
+        <p class="hint">
+          {nothingNew
+            ? 'No other photos turned up. Pick one of these, or photograph your own copy.'
+            : more
+              ? `Pick the one that shows its ${part} best, to crop it out, or search for others.`
+              : `Pick the one that shows its ${part} best, to crop it out.`}
+        </p>
       {:else}
         <p class="hint">None turned up. Photograph your own copy instead.</p>
       {/if}
@@ -396,36 +497,47 @@
     <p class="hint">Save it if it looks right, or let ChatGPT try again.</p>
   {:else if stage}
     <div class="cropper" bind:clientWidth={roomWidth} bind:clientHeight={roomHeight}>
-      <div
-        class="stage"
-        style:width="{Math.max(0, stage.width * stageScale)}px"
-        style:height="{Math.max(0, stage.height * stageScale)}px"
-      >
-        <canvas {@attach showStage} {@attach cropping} aria-label="The photo to crop"></canvas>
-        <span
-          class="crop"
-          style:left="{crop.x * 100}%"
-          style:top="{crop.y * 100}%"
-          style:width="{crop.width * 100}%"
-          style:height="{crop.height * 100}%"
-        ></span>
+      <!-- the turn button sits over the photo's top left corner -->
+      <div class="photo">
+        <div class="bar" bind:clientHeight={barHeight}>
+          <Pill
+            icon="turn"
+            aria-label="Turn the photo"
+            title="Turn the photo"
+            disabled={busy}
+            onclick={turn}
+          />
+        </div>
+        <div
+          class="stage"
+          style:width="{Math.max(0, stage.width * stageScale)}px"
+          style:height="{Math.max(0, stage.height * stageScale)}px"
+        >
+          <canvas {@attach showStage} {@attach cropping} aria-label="The photo to crop"></canvas>
+          <span
+            class="crop"
+            style:left="{crop.x * 100}%"
+            style:top="{crop.y * 100}%"
+            style:width="{crop.width * 100}%"
+            style:height="{crop.height * 100}%"
+          ></span>
+        </div>
       </div>
       <canvas
         {@attach showPreview}
         class="preview"
         style:width="{previewWidth}px"
         style:height="{previewHeight}px"
-        aria-label="The spine as it will stand on the shelf"
+        aria-label={part === 'cover'
+          ? 'The cover as it will show'
+          : 'The spine as it will stand on the shelf'}
       ></canvas>
     </div>
-    {#if picked}
-      <p class="hint">
-        Found on
-        <a href={picked.pageUrl} target="_blank" rel="noopener noreferrer">
-          {new URL(picked.pageUrl).hostname.replace(/^www\./, '')}</a
-        >
-      </p>
-    {/if}
+    <p class="hint">
+      {part === 'spine' && ai.connected('openai')
+        ? 'Hit Improve with AI or Save when you’re done cropping.'
+        : 'Hit Save when you’re done cropping.'}
+    </p>
   {:else if start === 'improve' && book.spineUrl && !found}
     <img class="current" src={book.spineUrl} alt="The spine of {book.title}" />
   {/if}
@@ -446,21 +558,17 @@
 
     <span class="choices">
       {#if drawn}
-        <Pill disabled={busy} onclick={() => drawn && draw(drawn.from)}>
-          {working === 'drawing' ? 'Drawing…' : 'Try again'}
-        </Pill>
+        <!-- a crop drawn before a reload is gone with the page, so it can't be drawn again -->
+        {#if drawn.from}
+          <Pill disabled={busy} onclick={() => drawn?.from && draw(drawn.from)}>
+            {working === 'drawing' ? 'Drawing…' : 'Try again'}
+          </Pill>
+        {/if}
         <Pill kind="primary" disabled={busy} onclick={() => save('drawn')}>
           {saving ? 'Saving…' : 'Save'}
         </Pill>
       {:else if stage}
-        <Pill
-          icon="turn"
-          aria-label="Turn the photo"
-          title="Turn the photo"
-          disabled={busy}
-          onclick={turn}
-        />
-        {#if ai.connected('openai')}
+        {#if part === 'spine' && ai.connected('openai')}
           <Pill
             icon="sparkle"
             title="Have ChatGPT draw this crop sharp and straight"
@@ -474,12 +582,19 @@
           {saving ? 'Saving…' : 'Save'}
         </Pill>
       {:else if found}
+        {#if more}
+          <Pill disabled={busy} onclick={find}>
+            {working === 'finding' ? 'Searching…' : 'Search other photos'}
+          </Pill>
+        {/if}
         <Pill icon="upload" disabled={busy} onclick={() => photoInput?.click()}>
           Upload your own
         </Pill>
       {:else if error && !working}
         <Pill disabled={busy} onclick={retry}>
-          {start instanceof File ? 'Choose another photo' : 'Try again'}
+          {start instanceof File || (start === 'resume' && !resumed?.from)
+            ? 'Choose another photo'
+            : 'Try again'}
         </Pill>
       {/if}
     </span>
@@ -598,10 +713,6 @@
     object-fit: contain;
   }
 
-  .hint a {
-    color: inherit;
-  }
-
   .working {
     display: flex;
     flex-wrap: wrap;
@@ -680,6 +791,14 @@
     align-items: center;
     justify-content: center;
     gap: 16px;
+  }
+
+  .photo {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
   }
 
   /* the crop is laid over the photo in shares of its size */

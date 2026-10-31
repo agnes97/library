@@ -4,6 +4,7 @@
   import { auth } from '../auth.svelte';
   import { coverShape, preloadCover } from '../covers';
   import { library } from '../library.svelte';
+  import { spineJob } from '../spineJob';
   import type { BookEdit, ShelfBook } from '../types';
   import BookCover3D from './BookCover3D.svelte';
   import LookEditor from './LookEditor.svelte';
@@ -284,8 +285,11 @@
   let brokenSpine = $state<string>();
   const spinePhoto = $derived(book.spineUrl !== brokenSpine ? book.spineUrl : undefined);
 
-  /** changing the cover and the spine on the first page, in place of the 3D cover */
-  let editingLook = $state(false);
+  /**
+   * changing the cover and the spine on the first page, in place of the 3D cover; open from the
+   * start when ChatGPT was still drawing its spine as the page reloaded
+   */
+  let editingLook = $state(untrack(() => canEdit && spineJob.saved()?.book === book.id));
   let lookEditor = $state<LookEditor>();
 
   /** asking whether to really take it off the shelf */
