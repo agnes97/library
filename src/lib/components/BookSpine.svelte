@@ -88,11 +88,14 @@
       box-shadow 0.6s;
   }
 
-  .spine:hover {
-    translate: 0 -16px;
-    box-shadow:
-      0 0 0 1px var(--light-a-2),
-      0 0 34px -6px var(--light-a-2);
+  /* a finger leaves its hover behind, so only a pointer lifts the book */
+  @media (hover: hover) {
+    .spine:hover {
+      translate: 0 -16px;
+      box-shadow:
+        0 0 0 1px var(--light-a-2),
+        0 0 34px -6px var(--light-a-2);
+    }
   }
 
   .spine:focus-visible {
@@ -125,9 +128,14 @@
   }
 
   /* slide out of the pile instead of lifting into the book above */
-  .flat:hover,
   .flat:focus-visible {
     translate: 16px 0;
+  }
+
+  @media (hover: hover) {
+    .flat:hover {
+      translate: 16px 0;
+    }
   }
 
   .flat .band {
@@ -232,6 +240,27 @@
   @media (prefers-reduced-motion: reduce) {
     .spine {
       transition: none;
+    }
+  }
+
+  /* phones: lettered to the size the books shrink to, as Bookcase sets --shelf-scale */
+  @media (max-width: 560px), (max-height: 500px) and (pointer: coarse) {
+    .spine {
+      padding: calc(18px * var(--shelf-scale, 1)) 0;
+    }
+
+    .flat {
+      padding: 0 calc(18px * var(--shelf-scale, 1));
+    }
+
+    .title {
+      font-size: calc(15px * var(--shelf-scale, 1));
+      max-height: calc(var(--h) - 96px * var(--shelf-scale, 1));
+    }
+
+    .flat .title {
+      max-width: calc(var(--h) - 96px * var(--shelf-scale, 1));
+      max-height: none;
     }
   }
 </style>

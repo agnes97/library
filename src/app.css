@@ -23,6 +23,9 @@
   --grain-h: url('./assets/grain-h.svg') 0 0 / 1200px 300px;
   --grain-v: url('./assets/grain-v.svg') 0 0 / 300px 1200px;
 
+  /* the phone header's bar, without the screen's notch; the bookcase pins below it */
+  --bar-height: 72px;
+
   color-scheme: dark;
   font-family: 'IM Fell English', Georgia, serif;
   line-height: 1.5;

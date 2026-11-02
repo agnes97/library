@@ -23,13 +23,19 @@
   </div>
   <div class="stem"></div>
   <div class="knot"></div>
+  <!-- the collar, band, ember bed and sparks belong to the phone's brazier -->
+  <div class="collar"></div>
   <div class="cup"></div>
+  <div class="band"></div>
   <div class="rim"></div>
+  <div class="ember"></div>
   <div class="flame">
     <div class="fl outer"></div>
     <div class="fl inner"></div>
     <div class="fl core"></div>
   </div>
+  <span class="spark"></span>
+  <span class="spark"></span>
 </div>
 
 <style>
@@ -96,6 +102,11 @@
   .out .flame {
     opacity: 0;
     scale: 0.3 0.15;
+  }
+
+  .out .ember,
+  .out .spark {
+    visibility: hidden;
   }
 
   .halo {
@@ -232,6 +243,13 @@
     box-shadow: 0 0 4px var(--f3);
   }
 
+  .collar,
+  .band,
+  .ember,
+  .spark {
+    display: none;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     .outer {
       animation: flick 1.7s ease-in-out infinite alternate;
@@ -272,9 +290,167 @@
     }
   }
 
+  /* no wall beside the case: small sconces on the wall above it, at the screen's edges */
   @media (max-width: 760px) {
     .torch {
+      top: -122px;
+      scale: 0.4;
+      transform-origin: 50% 0;
+    }
+
+    .left {
+      left: -31px;
+    }
+
+    .right {
+      right: -31px;
+    }
+  }
+
+  /*
+   * phones: braziers rather than sconces, just the bowl and its fire on a stub of the pole,
+   * standing on the bookcase's top at either side of the hint
+   */
+  @media (max-width: 560px) {
+    .torch {
+      top: auto;
+      bottom: 100%;
+      height: 126px;
+      scale: 0.74;
+      transform-origin: 50% 100%;
+    }
+
+    .left {
+      left: -12px;
+    }
+
+    .right {
+      right: -12px;
+    }
+
+    .plate,
+    .stem,
+    .knot {
       display: none;
+    }
+
+    .collar,
+    .band,
+    .ember,
+    .spark {
+      display: block;
+    }
+
+    .halo {
+      top: 50px;
+      width: 520px;
+      height: 520px;
+    }
+
+    .flame {
+      top: 4px;
+    }
+
+    .rim {
+      top: 78px;
+      width: 66px;
+      height: 8px;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #1a1316, #6a5560 40%, #8a7480 48%, #2a2024);
+    }
+
+    /* a deeper hammered-iron bowl, lit from the fire inside it */
+    .cup {
+      top: 84px;
+      width: 58px;
+      height: 36px;
+      clip-path: polygon(0 0, 100% 0, 84% 70%, 64% 100%, 36% 100%, 16% 70%);
+      background:
+        radial-gradient(
+          ellipse 60% 30% at 50% 0%,
+          color-mix(in srgb, var(--f2) 55%, transparent),
+          transparent 70%
+        ),
+        repeating-linear-gradient(90deg, transparent 0 7px, rgb(0 0 0 / 0.25) 7px 8px),
+        linear-gradient(90deg, #120d0f, #463840 38%, #2a2024 62%, #0b0809);
+      box-shadow: none;
+    }
+
+    .band {
+      position: absolute;
+      left: 50%;
+      top: 96px;
+      width: 52px;
+      height: 4px;
+      translate: -50% 0;
+      clip-path: polygon(0 0, 100% 0, 97% 100%, 3% 100%);
+      background: linear-gradient(90deg, #1a1316, #6a5560 45%, #241b1f);
+    }
+
+    .ember {
+      position: absolute;
+      left: 50%;
+      top: 79px;
+      width: 46px;
+      height: 6px;
+      translate: -50% 0;
+      border-radius: 50%;
+      background: radial-gradient(ellipse, var(--f1), var(--f2) 45%, transparent 75%);
+      filter: blur(1px);
+    }
+
+    .collar {
+      position: absolute;
+      left: 50%;
+      top: 118px;
+      width: 18px;
+      height: 8px;
+      translate: -50% 0;
+      border-radius: 4px;
+      background: linear-gradient(90deg, #140f11, #5a4650 50%, #140f11);
+    }
+
+    .spark {
+      position: absolute;
+      top: 20px;
+      left: 46%;
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--f1);
+      box-shadow: 0 0 4px var(--f2);
+      opacity: 0;
+    }
+
+    .spark + .spark {
+      left: 58%;
+    }
+  }
+
+  @media (max-width: 560px) and (prefers-reduced-motion: no-preference) {
+    .spark {
+      animation: rise 2.4s linear infinite;
+    }
+
+    .spark + .spark {
+      animation-delay: 1.1s;
+      animation-duration: 2.9s;
+    }
+  }
+
+  @keyframes rise {
+    from {
+      translate: 0 0;
+      opacity: 0;
+    }
+
+    15% {
+      opacity: 1;
+    }
+
+    to {
+      translate: 6px -46px;
+      opacity: 0;
     }
   }
 </style>

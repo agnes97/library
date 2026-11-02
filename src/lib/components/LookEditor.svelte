@@ -393,7 +393,18 @@
       --preview: 120px;
 
       gap: 10px;
-      padding: 14px 16px 12px;
+      padding: 14px 12px 12px;
+    }
+
+    .columns {
+      gap: 8px;
+    }
+
+    /* tighter, so "Pick from editions" fits half a narrow page */
+    .columns :global(.pill) {
+      gap: 5px;
+      padding: 0 10px;
+      letter-spacing: 0.02em;
     }
   }
 

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { MediaQuery } from 'svelte/reactivity';
+  import { TALLEST } from '../books';
   import type { Shelf, ShelfBook, ShelfOptions, ShelfPile } from '../types';
   import AddBookButton from './AddBookButton.svelte';
   import BookSpine from './BookSpine.svelte';
@@ -48,6 +50,7 @@
   });
 
   let wrap = $state<HTMLElement>();
+  let pin = $state<HTMLElement>();
   let caseElement = $state<HTMLElement>();
   let viewport = $state<HTMLElement>();
   let stack = $state<HTMLElement>();
@@ -72,8 +75,49 @@
   const LEAN_ANGLE = (9 * Math.PI) / 180;
   /** the width of a hanging year tag with four digits, chains included */
   const TAG_WIDTH = 164;
-  /** the room the add button before the first book takes: a column as wide as the tag, plus its margin */
-  const ADD_WIDTH = TAG_WIDTH + 12;
+
+  /** the height of a shelf, plank included, as in the styles below */
+  const UNIT_HEIGHT = 380;
+
+  /**
+   * Phones shrink the books, so a shelf holds more than two or three of them and a book lying in a
+   * pile still fits across it; the styles below use the same query.
+   */
+  const phone = new MediaQuery('(max-width: 560px), (max-height: 500px) and (pointer: coarse)');
+  /** the most a phone shrinks the books, and the least: further, a thin spine is too fine to tap */
+  const PHONE_SCALE: [number, number] = [0.55, 0.8];
+  const shelfScale = $derived(
+    phone.current && rowWidth
+      ? Math.min(
+          PHONE_SCALE[1],
+          Math.max(PHONE_SCALE[0], (rowWidth - 2 * ROW_PADDING - 2 * PILE_MARGIN) / TALLEST)
+        )
+      : 1
+  );
+  /** the year tags and the add button shrink less, to stay easy to read and tap */
+  const tagScale = $derived(Math.max(shelfScale, 0.7));
+  const tagWidth = $derived(TAG_WIDTH * tagScale);
+  const addWidth = $derived(tagWidth + 12);
+  const pileHeight = $derived(PILE_HEIGHT * shelfScale);
+
+  /**
+   * how thick a spine grows on a phone before it grows more slowly, and how much slower: a
+   * thousand-page book would otherwise take a third of the shelf
+   */
+  const THICK = 48;
+  const THICK_GROWTH = 0.35;
+  const thinned = (width: number) => (width <= THICK ? width : THICK + (width - THICK) * THICK_GROWTH);
+
+  /** A book as it stands on a shelf `shelfScale` times the usual size, a thick one thinner still. */
+  const resize = (item: ShelfBook): ShelfBook =>
+    shelfScale === 1
+      ? item
+      : {
+          ...item,
+          width: Math.round(thinned(item.width) * shelfScale),
+          height: Math.round(item.height * shelfScale),
+          bulk: Math.round(thinned(item.bulk) * shelfScale),
+        };
 
   /** "The End", its letters lit alternately by the two lights, spaces skipped */
   const endLetters = [...'The End'].map((char, i, all) => ({
@@ -120,7 +164,7 @@
         pile = [item];
         units.push(pile);
         stacked = item.bulk;
-      } else if (pile.length < PILE_BOOKS && stacked + PILE_GAP + item.bulk <= PILE_HEIGHT) {
+      } else if (pile.length < PILE_BOOKS && stacked + PILE_GAP + item.bulk <= pileHeight) {
         pile.push(item);
         stacked += PILE_GAP + item.bulk;
       } else {
@@ -217,7 +261,7 @@
   ): Shelf[] {
     if (!across) return [];
     const inner = across - 2 * ROW_PADDING;
-    const queue = fitSeries(gather(ordered), inner);
+    const queue = fitSeries(gather(ordered.map(resize)), inner);
 
     /** Takes spines and piles from `start` while they fit whole, a series all or none. */
     function fill(start: number, room: number, lean: boolean) {
@@ -266,7 +310,7 @@
       row.used +
       (row.tipped ?? 0) +
       (row.candleAt !== null ? CANDLE_WIDTH + GAP : 0) +
-      (row.add ? ADD_WIDTH : 0);
+      (row.add ? addWidth : 0);
 
     /** before the series closing the row, so it stands apart; at the end when none does */
     function candleSpot({ start, end }: Row) {
@@ -284,7 +328,7 @@
       let candle = candleMoved || (options.candle ?? false);
       // the add button opens the top shelf, ahead of the newest book
       const add = rows.length === 0 && withAdd;
-      const room = inner - (add ? ADD_WIDTH : 0);
+      const room = inner - (add ? addWidth : 0);
 
       let filled = fill(start, candle ? room - CANDLE_WIDTH - GAP : room, lean);
       candleMoved = false;
@@ -327,11 +371,11 @@
           : j === 0 || yearOf(firstOf(unit)) !== yearOf(firstOf(queue[j - 1]));
         // the tag hangs from the left of the button and book together
         const tagAt = offset;
-        if (add && i === 0) offset += ADD_WIDTH;
+        if (add && i === 0) offset += addWidth;
         offset += widthOf(unit) + GAP;
         const tag = {
           tag: first ? (label ?? yearOf(firstOf(unit))) : undefined,
-          tagFlip: first && tagAt + TAG_WIDTH > inner,
+          tagFlip: first && tagAt + tagWidth > inner,
         };
         return Array.isArray(unit)
           ? { key: `pile-${unit[0].key}`, pile: unit, ...tag }
@@ -402,6 +446,7 @@
   $effect(() => {
     void shelves.length;
     void onAdd;
+    void shelfScale;
     refit?.();
   });
 
@@ -414,16 +459,16 @@
    * shelves inside it instead of the case.
    */
   $effect(() => {
-    if (!wrap || !caseElement || !viewport || !stack) return;
-    const [wrapEl, caseEl, viewportEl, stackEl] = [wrap, caseElement, viewport, stack];
+    if (!wrap || !pin || !caseElement || !viewport || !stack) return;
+    const [wrapEl, pinEl, caseEl, viewportEl, stackEl] = [wrap, pin, caseElement, viewport, stack];
 
-    /** where the case pins, in px below the window top (1rem) */
+    /** where the case pins, in px below the window top (1rem, or below the phone header's bar) */
     let pinTop = 16;
     /** the shelf scroll position the page scroll last asked for */
     let wanted = 0;
 
     function measure() {
-      pinTop = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      pinTop = parseFloat(getComputedStyle(pinEl).top) || 16;
       const above = viewportEl.getBoundingClientRect().top - caseEl.getBoundingClientRect().top;
       // the shelf window runs to the bottom of the window, so the plinth only scrolls into view
       // once the last shelf has passed; a case with fewer shelves than that ends below its last
@@ -431,7 +476,7 @@
       const content = last.offsetTop + last.offsetHeight;
       const height = Math.min(
         content,
-        Math.max(380, Math.floor(window.innerHeight - pinTop - above))
+        Math.max(UNIT_HEIGHT * shelfScale, Math.floor(window.innerHeight - pinTop - above))
       );
       viewportHeight = height;
       travel = Math.max(0, content - height);
@@ -515,9 +560,15 @@
   {/if}
 {/snippet}
 
-<div class="wrap" bind:this={wrap}>
+<div
+  class="wrap"
+  bind:this={wrap}
+  style:--shelf-scale={shelfScale === 1 ? undefined : shelfScale}
+  style:--tag-scale={shelfScale === 1 ? undefined : tagScale}
+>
   <div
     class="pin"
+    bind:this={pin}
     style:--torch-a={lit.left ? 'var(--light-a-glow)' : 'transparent'}
     style:--torch-b={lit.right ? 'var(--light-b-glow)' : 'transparent'}
   >
@@ -560,7 +611,7 @@
                         />
                         {#if opens}
                           <!-- as wide as the tag, so the tag hangs centred over the button -->
-                          <div class="opener" style:width="{TAG_WIDTH}px">
+                          <div class="opener" style:width="{tagWidth}px">
                             <AddBookButton onclick={onAdd} />
                           </div>
                         {/if}
@@ -582,7 +633,7 @@
               <!-- no books yet: a shelf with only the add button on it -->
               <div class="unit">
                 <div class="row">
-                  <div class="opener" style:width="{TAG_WIDTH}px">
+                  <div class="opener" style:width="{tagWidth}px">
                     <AddBookButton onclick={onAdd} />
                   </div>
                 </div>
@@ -1012,6 +1063,41 @@
     .frieze {
       padding: 0 12px;
       gap: 10px;
+    }
+  }
+
+  /* phones: under the header's bar, which stays at the top */
+  @media (max-width: 560px) {
+    .pin {
+      top: calc(var(--bar-height) + env(safe-area-inset-top, 0px) + 8px);
+    }
+  }
+
+  /* phones: the books shrink by --shelf-scale, which the script sets under the same query */
+  @media (max-width: 560px), (max-height: 500px) and (pointer: coarse) {
+    .unit {
+      height: calc(380px * var(--shelf-scale, 1));
+    }
+
+    .row {
+      height: calc(354px * var(--shelf-scale, 1));
+    }
+
+    .end,
+    .last {
+      height: calc(350px * var(--shelf-scale, 1));
+    }
+
+    .end p {
+      font-size: calc(50px * var(--shelf-scale, 1));
+    }
+
+    .opener {
+      padding-top: calc(48px * var(--tag-scale, 1));
+    }
+
+    .opener :global(.add) {
+      scale: var(--tag-scale, 1);
     }
   }
 </style>

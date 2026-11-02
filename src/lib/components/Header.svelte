@@ -92,4 +92,51 @@
       0 0 28px color-mix(in srgb, var(--light-a-2) 28%, transparent),
       0 2px 0 #000;
   }
+
+  /*
+   * phones: a slim nameplate bar that stays at the top while the page scrolls, so the account
+   * button is always in reach; the torches move down beside the hint instead
+   */
+  @media (max-width: 560px) {
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      flex-wrap: nowrap;
+      gap: 12px;
+      box-sizing: border-box;
+      height: calc(var(--bar-height) + env(safe-area-inset-top, 0px));
+      /* out to the screen's edges, over the page's own padding */
+      margin: -20px -16px 0;
+      padding: env(safe-area-inset-top, 0px) 16px 0;
+      background: linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--bg) 90%, transparent),
+        color-mix(in srgb, var(--bg) 62%, transparent)
+      );
+      border-bottom: 1px solid color-mix(in srgb, var(--light-a-2) 22%, transparent);
+      box-shadow: 0 10px 24px -14px #000;
+    }
+
+    .brand {
+      flex: 1;
+      min-width: 0;
+      gap: 12px;
+    }
+
+    svg {
+      width: 32px;
+      height: 32px;
+    }
+
+    .eyebrow {
+      margin: 0;
+      font-size: 9px;
+      line-height: 1.1;
+    }
+
+    h1 {
+      font-size: 26px;
+    }
+  }
 </style>

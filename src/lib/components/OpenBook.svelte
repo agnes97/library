@@ -27,9 +27,9 @@
 
   const titleId = $props.id();
 
-  /** wide screens open the book sideways, narrow ones flip the cover up */
+  /** wide screens open the book on a spread of two pages, narrow ones show one page at a time */
   const LANDSCAPE = { pageWidth: 440, pageHeight: 580, coverHeight: 300 };
-  const PORTRAIT = { pageWidth: 340, pageHeight: 360, coverHeight: 210 };
+  const PORTRAIT = { pageWidth: 340, pageHeight: 480, coverHeight: 260 };
   /** leather and page edges sticking out past the pages */
   const OVERHANG = 20;
   const GUTTER = 32;
@@ -53,14 +53,38 @@
   /** how long the book waits for a cover still loading before it flies without its shape */
   const COVER_WAIT = 400;
 
+  /** the tallest a portrait page grows on a tall phone, and how much of that the cover takes */
+  const PORTRAIT_MAX_HEIGHT = 600;
+  const PORTRAIT_COVER_SHARE = 0.6;
+
+  /** a page turn from one side to the other; dragging part of the way takes part of the time */
+  const LEAF_TURN = 560;
+  const LEAF_EASING = 'cubic-bezier(0.3, 0.7, 0.2, 1)';
+  /** how far a drag has to go to turn the page all the way, as a share of the page's width */
+  const LEAF_DRAG = 1.2;
+  /** remembered once the first page has lifted its corner to show it turns */
+  const TURN_HINTED = 'pageTurnHinted';
+
   const portrait = $derived((innerWidth.current ?? 1024) < 700);
-  const layout = $derived(portrait ? PORTRAIT : LANDSCAPE);
+  /** a phone taller than the book is wide fills its height with a taller page, not empty backdrop */
+  const portraitLayout = $derived.by(() => {
+    const { pageWidth, pageHeight, coverHeight } = PORTRAIT;
+    const fit = ((innerWidth.current ?? pageWidth) - GUTTER) / (pageWidth + OVERHANG * 2);
+    const room = ((innerHeight.current ?? 0) - GUTTER) / Math.min(1, fit) - OVERHANG * 2;
+    const height = Math.min(PORTRAIT_MAX_HEIGHT, Math.max(pageHeight, Math.floor(room)));
+    return {
+      pageWidth,
+      pageHeight: height,
+      coverHeight: Math.round(coverHeight + (height - pageHeight) * PORTRAIT_COVER_SHARE),
+    };
+  });
+  const layout = $derived(portrait ? portraitLayout : LANDSCAPE);
 
   // shrink the whole book until it fits the window
   const scale = $derived.by(() => {
     const { pageWidth, pageHeight } = layout;
     const width = (portrait ? pageWidth : pageWidth * 2) + OVERHANG * 2;
-    const height = (portrait ? pageHeight * 2 : pageHeight) + OVERHANG * 2;
+    const height = pageHeight + OVERHANG * 2;
     return Math.min(
       1,
       ((innerWidth.current ?? width) - GUTTER) / width,
@@ -97,15 +121,14 @@
     const { pageWidth: pw, pageHeight: ph } = layout;
     if (!origin) {
       return portrait
-        ? { x: 0, y: ph * -0.39 - 4.68, r: 0, sx: 0.78, sy: 0.78 }
+        ? { x: -5.4, y: 0, r: 0, sx: 0.9, sy: 0.9 }
         : { x: pw * -0.39 - 4.68, y: 0, r: 0, sx: 0.78, sy: 0.78 };
     }
 
     // the closed cover's size and how far its centre sits from the book's centre
-    const coverWidth = portrait ? pw + 24 : pw + 12;
-    const coverHeight = portrait ? ph + 12 : ph + 24;
-    const offsetX = portrait ? 0 : pw / 2 + 6;
-    const offsetY = portrait ? ph / 2 + 6 : 0;
+    const coverWidth = pw + 12;
+    const coverHeight = ph + 24;
+    const offsetX = portrait ? 6 : pw / 2 + 6;
 
     // a book lying flat in a pile starts turned a quarter anticlockwise, top to the left,
     // and a tipped one starts tipped, so each rotates upright as it flies instead of being
@@ -121,8 +144,7 @@
     const cos = Math.cos((r * Math.PI) / 180);
     const sin = Math.sin((r * Math.PI) / 180);
     const cx = sx * offsetX;
-    const cy = sy * offsetY;
-    return { x: dx - (cx * cos - cy * sin), y: dy - (cx * sin + cy * cos), r, sx, sy };
+    return { x: dx - cx * cos, y: dy - cx * sin, r, sx, sy };
   });
 
   let closing = $state(false);
@@ -162,6 +184,12 @@
   async function requestClose() {
     if (closing) return;
     closing = true;
+    // the book shuts in the order it opened, so a turned page comes back over the details first
+    drag = null;
+    if (leafRun || leafAt > 0) {
+      page = 1;
+      await turnLeaf(0, CLOSE_RATE);
+    }
     // the spine has slid back into the shelf since it was clicked
     origin = measure();
     const onShelf = `translate(${from.x}px, ${from.y}px) rotate(${from.r}deg) scale(${from.sx}, ${from.sy})`;
@@ -235,6 +263,7 @@
       await Promise.allSettled(node.getAnimations({ subtree: true }).map((a) => a.finished));
       landed = true;
       if (lateRatio && !closing && !gone) reshape(lateRatio);
+      if (portrait && !closing && !gone) hintTurn();
     });
 
     // the page stays put behind the open book; the gutter keeps the shelves from shifting
@@ -384,10 +413,285 @@
     node.setSelectionRange(node.value.length, node.value.length);
   }
 
+  /**
+   * A phone shows one page at a time: page 1 holds the 3D cover on a loose leaf, page 2 the details
+   * under it. Turned, the leaf lies to the left by the cover, and its edge there turns it back.
+   */
+  let page = $state<1 | 2>(1);
+  /** said aloud when the page changes */
+  let pageAnnounced = $state('');
+  /** correcting something, so the page stays where it is */
+  const busy = $derived(editingLook || editing !== null || confirmingRemove);
+  let flyleaf: HTMLElement | undefined;
+  let firstPage = $state<HTMLElement>();
+  let title = $state<HTMLElement>();
+  /** how far the leaf has turned, 0 lying on the details to 1 lying by the cover */
+  let leafAt = 0;
+  let leafRun: { start: number; to: number; animations: Animation[] } | null = null;
+  let leafPeek: Animation[] = [];
+
+  /** a turned leaf lies over the cover's inside, which lies over the details, so it rises above it */
+  const leafTransform = (at: number) => `translateZ(${at > 0 ? 2 : 0.5}px) rotateY(${-180 * at}deg)`;
+  /** darkest edge-on */
+  const leafShade = (at: number) => Math.sin(Math.PI * at) * 0.45;
+  const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function leafShades() {
+    return [...(flyleaf?.querySelectorAll<HTMLElement>('.leaf-shade') ?? [])];
+  }
+
+  function paintLeaf() {
+    if (!flyleaf) return;
+    flyleaf.style.transform = leafTransform(leafAt);
+    for (const shade of leafShades()) shade.style.opacity = String(leafShade(leafAt));
+  }
+
+  /** Stops a turn where it has got to, so a finger can take the leaf from there. */
+  function haltLeaf() {
+    leafPeek.forEach((animation) => animation.cancel());
+    leafPeek = [];
+    if (!leafRun) return;
+    const { start, to, animations } = leafRun;
+    const progress = animations[0].effect?.getComputedTiming().progress ?? 1;
+    leafAt = start + (to - start) * progress;
+    animations.forEach((animation) => animation.cancel());
+    leafRun = null;
+    paintLeaf();
+  }
+
+  async function turnLeaf(to: number, rate = 1) {
+    haltLeaf();
+    const start = leafAt;
+    if (!flyleaf || reducedMotion()) {
+      leafAt = to;
+      paintLeaf();
+      return;
+    }
+    // stepped, so the leaf swings round its hinge instead of sliding through it
+    const steps = 8;
+    const at = Array.from({ length: steps + 1 }, (_, i) => start + ((to - start) * i) / steps);
+    const timing: KeyframeAnimationOptions = {
+      duration: (LEAF_TURN * Math.max(0.35, Math.abs(to - start))) / rate,
+      easing: LEAF_EASING,
+      fill: 'forwards',
+    };
+    const animations = [
+      flyleaf.animate(
+        at.map((a) => ({ transform: leafTransform(a) })),
+        timing
+      ),
+      ...leafShades().map((shade) =>
+        shade.animate(
+          at.map((a) => ({ opacity: leafShade(a) })),
+          timing
+        )
+      ),
+    ];
+    leafRun = { start, to, animations };
+    try {
+      await animations[0].finished;
+    } catch {
+      return;
+    }
+    if (leafRun?.animations !== animations) return;
+    leafAt = to;
+    paintLeaf();
+    animations.forEach((animation) => animation.cancel());
+    leafRun = null;
+  }
+
+  async function turnTo(target: 1 | 2) {
+    if (closing) return;
+    page = target;
+    pageAnnounced = `Page ${target} of 2`;
+    const turned = turnLeaf(target === 2 ? 1 : 0);
+    // the page out of view is inert until the change lands
+    await tick();
+    (target === 2 ? title : firstPage)?.focus({ preventScroll: true });
+    await turned;
+  }
+
+  /** Lifts the leaf's corner and lets it fall, the first time a book is opened on a phone. */
+  function hintTurn() {
+    try {
+      if (localStorage.getItem(TURN_HINTED)) return;
+      localStorage.setItem(TURN_HINTED, '1');
+    } catch {
+      return;
+    }
+    if (!flyleaf || busy || page !== 1 || reducedMotion()) return;
+    const lift = [0, 0.1, 0];
+    const timing = { duration: 950, easing: 'ease-in-out' };
+    leafPeek = [
+      flyleaf.animate(
+        lift.map((a) => ({ transform: leafTransform(a) })),
+        timing
+      ),
+      ...leafShades().map((shade) =>
+        shade.animate(
+          lift.map((a) => ({ opacity: leafShade(a) })),
+          timing
+        )
+      ),
+    ];
+  }
+
+  /** a finger turning the leaf from its corner, its outer edge or the edge of the turned leaf */
+  let drag: {
+    x: number;
+    from: number;
+    /** the screen pixels that turn it all the way */
+    width: number;
+    moved: boolean;
+    last: { at: number; time: number };
+    /** turn per millisecond, so a flick finishes the turn */
+    speed: number;
+    frame: number;
+  } | null = null;
+
+  function startDrag(event: PointerEvent) {
+    if (busy || closing || reducedMotion() || event.button !== 0) return;
+    haltLeaf();
+    drag = {
+      x: event.clientX,
+      from: leafAt,
+      width: layout.pageWidth * scale * LEAF_DRAG,
+      moved: false,
+      last: { at: leafAt, time: event.timeStamp },
+      speed: 0,
+      frame: 0,
+    };
+    (event.currentTarget as Element).setPointerCapture(event.pointerId);
+  }
+
+  function moveDrag(event: PointerEvent) {
+    if (!drag) return;
+    const delta = drag.x - event.clientX;
+    if (!drag.moved && Math.abs(delta) < 6) return;
+    drag.moved = true;
+    const at = Math.min(1, Math.max(0, drag.from + delta / drag.width));
+    const elapsed = event.timeStamp - drag.last.time;
+    if (elapsed > 0) drag.speed = (at - drag.last.at) / elapsed;
+    drag.last = { at, time: event.timeStamp };
+    leafAt = at;
+    cancelAnimationFrame(drag.frame);
+    drag.frame = requestAnimationFrame(paintLeaf);
+  }
+
+  function endDrag(event: PointerEvent) {
+    if (!drag) return;
+    const { moved, speed, frame } = drag;
+    drag = null;
+    cancelAnimationFrame(frame);
+    if (!moved) return;
+    // the click that follows a drag must not turn the page a second time
+    event.currentTarget?.addEventListener('click', (click) => click.stopImmediatePropagation(), {
+      capture: true,
+      once: true,
+    });
+    const forward = speed > 0.0015 || (speed >= -0.0015 && leafAt > 0.5);
+    turnTo(forward ? 2 : 1);
+  }
+
+  /** the turning handlers, shared by every place a page can be turned from */
+  const turnable = {
+    onpointerdown: startDrag,
+    onpointermove: moveDrag,
+    onpointerup: endDrag,
+    onpointercancel: endDrag,
+  };
+
+  /** The leaf starts on the details whenever it appears, as the book always opens on page 1. */
+  function leaf(node: HTMLElement) {
+    flyleaf = node;
+    leafAt = 0;
+    leafRun = null;
+    page = 1;
+    paintLeaf();
+    return () => {
+      if (flyleaf === node) flyleaf = undefined;
+    };
+  }
+
+  function onKeydown(event: KeyboardEvent) {
+    if (!portrait || busy || closing || !landed) return;
+    if (event.key === 'ArrowRight' && page === 1) turnTo(2);
+    else if (event.key === 'ArrowLeft' && page === 2) turnTo(1);
+    else return;
+    event.preventDefault();
+  }
+
   function onBackdropClick(event: MouseEvent) {
     if (event.target === event.currentTarget) requestClose();
   }
 </script>
+
+{#snippet closeButton()}
+  <button type="button" class="close" aria-label="Close book" onclick={requestClose}>
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.6"
+      stroke-linecap="round"
+      aria-hidden="true"
+    >
+      <path d="M5 5l10 10M15 5L5 15" />
+    </svg>
+  </button>
+{/snippet}
+
+{#snippet firstPageContent()}
+  <div class="page page-1" tabindex="-1" bind:this={firstPage}>
+    <div class={['leaf', { asking: confirmingRemove }]}>
+      <BookCover3D {book} height={layout.coverHeight} />
+      <p class="hint">Drag the cover to turn it</p>
+    </div>
+    {#if editingLook}
+      <LookEditor bind:this={lookEditor} {book} onClose={() => (editingLook = false)} />
+    {/if}
+    <div class="actions">
+      {#if removeError}
+        <p class="edit-error" role="alert">{removeError}</p>
+      {/if}
+      {#if confirmingRemove}
+        <span class="remove-ask">Take {book.title} off your shelf?</span>
+        <span class="choices">
+          <Pill disabled={removing} onclick={() => (confirmingRemove = false)}>Keep it</Pill>
+          <Pill kind="danger" icon="bin" disabled={removing} onclick={remove}>
+            {removing ? 'Removing…' : 'Remove'}
+          </Pill>
+        </span>
+      {:else}
+        <span class="choices">
+          {#if canEdit}
+            <Pill
+              icon="pencil"
+              onclick={() => {
+                if (!closing) editingLook = true;
+              }}
+            >
+              Edit look
+            </Pill>
+          {/if}
+          {#if canRemove}
+            <Pill
+              icon="bin"
+              aria-label="Remove from shelf"
+              title="Remove from shelf"
+              onclick={() => (confirmingRemove = true)}
+            />
+          {/if}
+        </span>
+      {/if}
+    </div>
+    {#if portrait}
+      <p class="folio" aria-hidden="true">i</p>
+    {/if}
+  </div>
+{/snippet}
 
 <dialog
   {@attach show}
@@ -403,6 +707,7 @@
     else requestClose();
   }}
   onclick={onBackdropClick}
+  onkeydown={onKeydown}
   style:--pw="{layout.pageWidth}px"
   style:--ph="{layout.pageHeight}px"
   style:--s={scale}
@@ -417,10 +722,14 @@
   style:--book-accent={book.colors.accent}
   style:--ink={book.colors.ink}
 >
+  {#if portrait}
+    <p class="announce" aria-live="polite">{pageAnnounced}</p>
+  {/if}
   <div class="scene">
     <div class="book">
       <div class="board">
-        {#if cover && coverRatio}
+        <!-- a phone shows the spine strip on the cover from the start, so needs none under it -->
+        {#if cover && coverRatio && !portrait}
           <div class="board-spine" aria-hidden="true">
             {#if spinePhoto}
               <img src={spinePhoto} alt="" />
@@ -429,22 +738,11 @@
         {/if}
       </div>
 
-      <div class="page page-2">
+      <div class="page page-2" inert={portrait && page === 1}>
         <div class="details">
-          <button type="button" class="close" aria-label="Close book" onclick={requestClose}>
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.6"
-              stroke-linecap="round"
-              aria-hidden="true"
-            >
-              <path d="M5 5l10 10M15 5L5 15" />
-            </svg>
-          </button>
+          {#if !portrait}
+            {@render closeButton()}
+          {/if}
           <span class="ornament" aria-hidden="true">❦</span>
           {#if editing === 'series'}
             <!-- saved once the focus leaves both fields, not when it moves between them -->
@@ -502,7 +800,7 @@
               </button>
             </p>
           {/if}
-          <h2 id={titleId}>
+          <h2 id={titleId} tabindex="-1" bind:this={title}>
             {#if editing === 'title'}
               <input
                 {@attach focusEnd}
@@ -605,7 +903,82 @@
           {/if}
         </div>
         <p class="read-in">Last read in {reading.read.slice(0, 4)}</p>
+        {#if portrait}
+          <p class="folio" aria-hidden="true">ii</p>
+        {/if}
       </div>
+
+      {#if portrait}
+        <!-- the first page on a loose leaf over the details, hinged at the spine like the cover -->
+        <div class="flyleaf" inert={page === 2} {@attach leaf}>
+          <div class="face recto">
+            {@render firstPageContent()}
+            {#if !busy}
+              <button
+                type="button"
+                class="turn ear"
+                aria-label="Turn to page ii"
+                onclick={() => turnTo(2)}
+                {...turnable}
+              >
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 2.5 7.5 7 3 11.5" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="turn edge"
+                aria-hidden="true"
+                tabindex="-1"
+                onclick={() => turnTo(2)}
+                {...turnable}
+              ></button>
+            {/if}
+            <span class="leaf-shade"></span>
+          </div>
+          <div class="face verso">
+            <span class="leaf-shade"></span>
+          </div>
+        </div>
+
+        {#if page === 2 && !busy}
+          <!-- the turned leaf's edge, still showing at the side of the screen -->
+          <button
+            type="button"
+            class="turn spine"
+            aria-label="Back to page i"
+            onclick={() => turnTo(1)}
+            {...turnable}
+          >
+            <svg
+              width="10"
+              height="14"
+              viewBox="0 0 10 14"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M7 2.5 2.5 7 7 11.5" />
+            </svg>
+          </button>
+        {/if}
+
+        <!-- over the page's corner, above the leaf, so it stays put whichever page shows -->
+        <div class="corner">{@render closeButton()}</div>
+      {/if}
 
       <!-- the first page is on the inside of the cover, so it turns with it -->
       <div class="cover">
@@ -633,50 +1006,9 @@
           </div>
         {/if}
         <div class="face back">
-          <div class="page page-1">
-            <div class={['leaf', { asking: confirmingRemove }]}>
-              <BookCover3D {book} height={layout.coverHeight} />
-              <p class="hint">Drag the cover to turn it</p>
-            </div>
-            {#if editingLook}
-              <LookEditor bind:this={lookEditor} {book} onClose={() => (editingLook = false)} />
-            {/if}
-            <div class="actions">
-              {#if removeError}
-                <p class="edit-error" role="alert">{removeError}</p>
-              {/if}
-              {#if confirmingRemove}
-                <span class="remove-ask">Take {book.title} off your shelf?</span>
-                <span class="choices">
-                  <Pill disabled={removing} onclick={() => (confirmingRemove = false)}>Keep it</Pill>
-                  <Pill kind="danger" icon="bin" disabled={removing} onclick={remove}>
-                    {removing ? 'Removing…' : 'Remove'}
-                  </Pill>
-                </span>
-              {:else}
-                <span class="choices">
-                  {#if canEdit}
-                    <Pill
-                      icon="pencil"
-                      onclick={() => {
-                        if (!closing) editingLook = true;
-                      }}
-                    >
-                      Edit look
-                    </Pill>
-                  {/if}
-                  {#if canRemove}
-                    <Pill
-                      icon="bin"
-                      aria-label="Remove from shelf"
-                      title="Remove from shelf"
-                      onclick={() => (confirmingRemove = true)}
-                    />
-                  {/if}
-                </span>
-              {/if}
-            </div>
-          </div>
+          {#if !portrait}
+            {@render firstPageContent()}
+          {/if}
         </div>
       </div>
     </div>
@@ -705,8 +1037,10 @@
     color: var(--paper-ink);
   }
 
+  /* unsafe: a book taller than a short screen is shrunk around its middle, so its box centres too */
   dialog[open] {
     display: grid;
+    place-content: unsafe center;
     place-items: center;
   }
 
@@ -743,7 +1077,37 @@
 
   .portrait .scene {
     width: var(--pw);
-    height: calc(var(--ph) * 2);
+    height: var(--ph);
+  }
+
+  /* comes in once the cover has opened off it */
+  .corner {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    transform: translateZ(3px);
+    pointer-events: auto;
+    animation: corner-in var(--t) both;
+  }
+
+  .corner .close {
+    position: static;
+  }
+
+  @keyframes corner-in {
+    0%,
+    70% {
+      opacity: 0;
+    }
+  }
+
+  .announce {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   .book {
@@ -785,26 +1149,23 @@
       0 0 60px -18px color-mix(in srgb, var(--light-a-2) 35%, transparent);
   }
 
-  .landscape .board,
-  .landscape .cover {
-    left: var(--pw);
+  /* the spine: down the middle of a spread, down the left of a single page */
+  .landscape {
+    --spine: var(--pw);
+  }
+
+  .portrait {
+    --spine: 0px;
+  }
+
+  .board,
+  .cover {
+    left: var(--spine);
     top: -12px;
   }
 
-  .portrait .board,
-  .portrait .cover {
-    left: -12px;
-    top: var(--ph);
-    width: calc(var(--pw) + 24px);
-    height: calc(var(--ph) + 12px);
-  }
-
-  .landscape .board {
+  .board {
     border-radius: 2px 8px 8px 2px;
-  }
-
-  .portrait .board {
-    border-radius: 2px 2px 8px 8px;
   }
 
   .page {
@@ -816,8 +1177,8 @@
     background-color: var(--paper);
   }
 
-  .landscape .page-2 {
-    left: var(--pw);
+  .page-2 {
+    left: var(--spine);
     top: 0;
     border-radius: 0 3px 3px 0;
     background-image: linear-gradient(90deg, var(--gutter-shade));
@@ -848,36 +1209,142 @@
       -8px 4px 0 #ddd0b0;
   }
 
-  .portrait .page-2 {
+  /* on a phone the first page is a leaf of its own over the details, turning on the same hinge */
+  .flyleaf {
+    position: absolute;
     left: 0;
-    top: var(--ph);
-    border-radius: 0 0 3px 3px;
-    background-image: linear-gradient(180deg, var(--gutter-shade));
-    box-shadow:
-      1px 1px 0 #d6c9ab,
-      1px 2px 0 #efe5cf,
-      2px 3px 0 #d3c5a5,
-      2px 4px 0 #ebdfc6,
-      3px 5px 0 #cfc09e,
-      3px 6px 0 #e6d9bc,
-      4px 7px 0 #cabb97,
-      4px 8px 0 #ddd0b0;
+    top: 0;
+    width: var(--pw);
+    height: var(--ph);
+    transform-origin: 0 50%;
+    transform-style: preserve-3d;
+    transform: translateZ(0.5px);
+    pointer-events: auto;
   }
 
   .portrait .page-1 {
-    left: 12px;
-    top: 12px;
-    border-radius: 3px 3px 0 0;
-    background-image: linear-gradient(0deg, var(--gutter-shade));
-    box-shadow:
-      1px -1px 0 #d6c9ab,
-      1px -2px 0 #efe5cf,
-      2px -3px 0 #d3c5a5,
-      2px -4px 0 #ebdfc6,
-      3px -5px 0 #cfc09e,
-      3px -6px 0 #e6d9bc,
-      4px -7px 0 #cabb97,
-      4px -8px 0 #ddd0b0;
+    left: 0;
+    top: 0;
+    border-radius: 0 3px 3px 0;
+    background-image: linear-gradient(90deg, var(--gutter-shade));
+  }
+
+  .page-1:focus,
+  h2:focus {
+    outline: none;
+  }
+
+  .verso {
+    transform: rotateY(180deg);
+    border-radius: 3px 0 0 3px;
+    background-color: #ebe0c8;
+    background-image: linear-gradient(270deg, var(--gutter-shade));
+  }
+
+  .leaf-shade {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    border-radius: inherit;
+  }
+
+  /* where a finger can turn the page; the 3D cover keeps its own drag and the text scrolls */
+  .turn {
+    position: absolute;
+    z-index: 2;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--paper-accent);
+    cursor: pointer;
+    touch-action: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .turn:focus-visible {
+    outline: 2px solid var(--paper-accent);
+    outline-offset: -4px;
+  }
+
+  /* the folded corner, showing the back of the page and the page under it */
+  .ear {
+    right: 0;
+    bottom: 0;
+    width: 52px;
+    height: 52px;
+  }
+
+  .ear::before,
+  .ear::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 38px;
+    height: 38px;
+  }
+
+  .ear::before {
+    background: linear-gradient(to top left, #e6dbc2 0 50%, transparent 50%);
+  }
+
+  .ear::after {
+    background: linear-gradient(
+      to bottom right,
+      #d9cba9 0%,
+      #efe5d0 46%,
+      #e2d5b8 50%,
+      transparent 50%
+    );
+    filter: drop-shadow(1px 1px 1.5px rgb(60 30 20 / 0.35));
+  }
+
+  .ear svg {
+    position: absolute;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1;
+  }
+
+  .edge {
+    right: 0;
+    top: 0;
+    bottom: 52px;
+    width: 26px;
+  }
+
+  /* over the turned leaf's edge, which lies just left of the details */
+  .turn.spine {
+    left: -22px;
+    top: 0;
+    width: 36px;
+    height: var(--ph);
+    display: grid;
+    place-items: center;
+    color: var(--paper-muted);
+    transform: translateZ(3px);
+    pointer-events: auto;
+  }
+
+  .turn.spine svg {
+    margin-left: -14px;
+  }
+
+  /* page numbers, printed at the foot like a real book */
+  .folio {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 16px;
+    text-align: center;
+    font-family: var(--caps);
+    font-weight: 600;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    color: var(--paper-muted);
   }
 
   /* the front cover swings open on its hinge and ends up holding the first page */
@@ -886,16 +1353,10 @@
     animation: var(--t) both;
   }
 
-  .landscape .cover {
+  .cover {
     transform-origin: 0 50%;
     transform: translateZ(1px) rotateY(-180deg);
     animation-name: flip-y;
-  }
-
-  .portrait .cover {
-    transform-origin: 50% 0;
-    transform: translateZ(1px) rotateX(180deg);
-    animation-name: flip-x;
   }
 
   .face {
@@ -943,14 +1404,9 @@
       linear-gradient(135deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0) 45%);
   }
 
-  .landscape .front {
+  .front {
     --hinge: 90deg;
     border-radius: 2px 8px 8px 2px;
-  }
-
-  .portrait .front {
-    --hinge: 180deg;
-    border-radius: 2px 2px 8px 8px;
   }
 
   .front > span {
@@ -980,15 +1436,9 @@
    * against the board's right edge, leaving this much of the board bare to its left; the back
    * keeps the page's shape for the first page
    */
-  .landscape {
+  dialog {
     --cover-gap: calc(
       var(--pw) + 12px - min(var(--pw) + 12px, (var(--ph) + 24px) * var(--cover-ratio, 9))
-    );
-  }
-
-  .portrait {
-    --cover-gap: calc(
-      var(--pw) + 24px - min(var(--pw) + 24px, (var(--ph) + 12px) * var(--cover-ratio, 9))
     );
   }
 
@@ -1000,21 +1450,18 @@
 
   /*
    * while the cover is shut, nothing shows beside the picture; the page and board under it sweep
-   * in from its edge to the spine as it opens
+   * in from its edge to the spine as it opens. A phone skips the sweeps and shows the spine strip
+   * beside the picture from the start.
    */
-  .narrowed .board,
-  .narrowed .page-2 {
+  .narrowed.landscape .board,
+  .narrowed.landscape .page-2 {
     /* where the picture starts, from the element's left edge (the portrait page is inset 12px) */
     --uncover-from: var(--cover-gap);
     animation: uncover var(--t) both;
   }
 
-  .narrowed .page-2 {
+  .narrowed.landscape .page-2 {
     animation-name: uncover-page;
-  }
-
-  .narrowed.portrait .page-2 {
-    --uncover-from: calc(var(--cover-gap) - 12px);
   }
 
   /* the spine again on the board, so lifting the cover shows the spine behind it, not a gap */
@@ -1035,14 +1482,13 @@
     animation: strip var(--t) both;
   }
 
-  .landscape .strip,
-  .landscape .board-spine {
+  .strip,
+  .board-spine {
     border-radius: 2px 0 0 2px;
   }
 
-  .portrait .strip,
-  .portrait .board-spine {
-    border-radius: 0 0 0 8px;
+  .portrait .strip {
+    animation: none;
   }
 
   .strip img,
@@ -1125,14 +1571,14 @@
     animation: shade var(--t) both;
   }
 
-  .landscape .back {
+  .back {
     transform: rotateY(180deg);
     border-radius: 8px 2px 2px 8px;
   }
 
+  /* nothing on the inside of a phone's cover to reach */
   .portrait .back {
-    transform: rotateX(180deg);
-    border-radius: 8px 8px 2px 2px;
+    pointer-events: none;
   }
 
   .leaf {
@@ -1174,7 +1620,7 @@
   }
 
   .portrait .details {
-    bottom: 58px;
+    bottom: 68px;
     gap: 12px;
     padding: 36px 28px 0;
   }
@@ -1193,9 +1639,13 @@
     color: var(--paper-muted);
   }
 
+  /* centred over the folio, like a colophon */
   .portrait .read-in {
-    right: 24px;
-    bottom: 18px;
+    left: 0;
+    right: 0;
+    bottom: 40px;
+    font-size: 11px;
+    text-align: center;
   }
 
   .details .ornament {
@@ -1311,8 +1761,10 @@
     text-align: center;
   }
 
+  /* above the folio, clear of the folded corner */
   .portrait .actions {
-    bottom: 12px;
+    bottom: 42px;
+    padding: 0 52px;
   }
 
   .remove-ask {
@@ -1472,7 +1924,7 @@
     }
     30%,
     42% {
-      transform: translate(0, calc(var(--ph) * -0.39 - 4.68px)) rotate(0) scale(0.78);
+      transform: translate(-5.4px, 0) rotate(0) scale(0.9);
       animation-timing-function: cubic-bezier(0.5, 0, 0.25, 1);
     }
     85%,
@@ -1490,18 +1942,6 @@
     85%,
     100% {
       transform: translateZ(1px) rotateY(-180deg);
-    }
-  }
-
-  @keyframes flip-x {
-    0%,
-    42% {
-      transform: translateZ(1px) rotateX(0);
-      animation-timing-function: cubic-bezier(0.55, 0.05, 0.3, 1);
-    }
-    85%,
-    100% {
-      transform: translateZ(1px) rotateX(180deg);
     }
   }
 
@@ -1534,7 +1974,8 @@
       display: none;
     }
 
-    dialog::backdrop {
+    dialog::backdrop,
+    .corner {
       animation: none;
     }
 

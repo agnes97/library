@@ -684,5 +684,12 @@
       width: 48px;
       padding: 0 8px;
     }
+
+    /* reaches the bottom of a short screen at most, below the header, and scrolls past that */
+    .menu {
+      max-height: calc(100dvh - 100px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
   }
 </style>

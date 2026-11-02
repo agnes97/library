@@ -129,7 +129,8 @@
       </div>
 
       <p class="hint">
-        Scroll, hover, click: let the pages flick.
+        <!-- a finger has no hover, and taps rather than clicks -->
+        <span class="by-pointer">Scroll, hover, click</span><span class="by-touch">Scroll and tap</span>: let the pages flick.
       </p>
 
       <Bookcase
@@ -216,6 +217,20 @@
     color: var(--text-muted);
   }
 
+  .by-touch {
+    display: none;
+  }
+
+  @media (hover: none) {
+    .by-pointer {
+      display: none;
+    }
+
+    .by-touch {
+      display: inline;
+    }
+  }
+
   /* outside .outer so it sits above the backdrop's fog and vignette */
   footer {
     --nudge: 2rem;
@@ -257,6 +272,37 @@
 
     footer {
       padding: 56px calc(16px + var(--nudge)) 20px 16px;
+    }
+  }
+
+  /* phones: the shelves start sooner, under a shorter header */
+  @media (max-width: 560px) {
+    .outer {
+      padding-top: 20px;
+    }
+
+    /* the header's bar takes its place */
+    .divider {
+      display: none;
+    }
+
+    /* framed by the two braziers, which stand on the bookcase's top at either side */
+    .hint {
+      box-sizing: border-box;
+      min-height: 112px;
+      margin: 8px auto 0;
+      padding: 24px 64px 0;
+      font-family: var(--serif);
+      font-weight: 600;
+      font-size: 18px;
+      line-height: 1.25;
+      color: var(--text);
+      text-wrap: balance;
+    }
+
+    footer {
+      padding-top: 36px;
+      font-size: 17px;
     }
   }
 </style>

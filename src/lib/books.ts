@@ -15,6 +15,8 @@ const PALETTES: Book['colors'][] = [
 ];
 
 const HEIGHTS = [286, 248, 270, 300, 262, 236, 292, 254, 278, 244];
+/** the tallest a spine stands, and so the longest a book lying in a pile */
+export const TALLEST = Math.max(...HEIGHTS);
 /** Page counts, one picked per book whose own is unknown, to make it as thick as a usual book. */
 const GUESSED_PAGES = [320, 280, 400, 240, 460, 300, 360, 260, 420, 340];
 /** Slimmer volumes for a series, so more of them fit in a pile. */

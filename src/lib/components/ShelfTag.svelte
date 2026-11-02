@@ -194,6 +194,14 @@
     transform: translateX(-1px);
   }
 
+  /* a fingertip's worth of plate around the arrow, without the tag growing */
+  @media (pointer: coarse) {
+    .back {
+      margin: -13px -7px;
+      padding: 10px;
+    }
+  }
+
   .back:focus-visible {
     outline: 2px solid #2b1d06;
     outline-offset: 1px;
@@ -216,5 +224,18 @@
 
   .rivet.right {
     right: 13px;
+  }
+
+  /* phones: shrinks with the books, as Bookcase sets --tag-scale under the same query */
+  @media (max-width: 560px), (max-height: 500px) and (pointer: coarse) {
+    .tag {
+      top: calc(30px * var(--tag-scale, 1));
+      scale: var(--tag-scale, 1);
+      transform-origin: 0 0;
+    }
+
+    .flip {
+      transform-origin: 100% 0;
+    }
   }
 </style>
