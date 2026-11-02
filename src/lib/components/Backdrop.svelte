@@ -1,6 +1,5 @@
 <!--
-  The castle room behind (and the fog in front of) the page content. It also defines the
-  #grainH and #grainV wood filters the bookcase uses.
+  The castle room behind (and the fog in front of) the page content.
 -->
 <script lang="ts">
   const motes = [
@@ -12,96 +11,7 @@
   ];
 </script>
 
-<svg class="wall" aria-hidden="true">
-  <defs>
-    <pattern id="blocks" width="330" height="176" patternUnits="userSpaceOnUse">
-      <rect x="0" y="0" width="108" height="42" rx="3" fill="#1d1618" />
-      <rect x="110" y="0" width="108" height="42" rx="3" fill="#1b1416" />
-      <rect x="220" y="0" width="108" height="42" rx="3" fill="#1e1719" />
-      <rect x="-55" y="44" width="108" height="42" rx="3" fill="#1a1415" />
-      <rect x="55" y="44" width="108" height="42" rx="3" fill="#1d1618" />
-      <rect x="165" y="44" width="108" height="42" rx="3" fill="#1c1517" />
-      <rect x="275" y="44" width="108" height="42" rx="3" fill="#1a1415" />
-      <rect x="-90" y="88" width="108" height="42" rx="3" fill="#1c1517" />
-      <rect x="20" y="88" width="108" height="42" rx="3" fill="#1b1416" />
-      <rect x="130" y="88" width="108" height="42" rx="3" fill="#1e1719" />
-      <rect x="240" y="88" width="108" height="42" rx="3" fill="#1c1517" />
-      <rect x="-35" y="132" width="108" height="42" rx="3" fill="#1b1517" />
-      <rect x="75" y="132" width="108" height="42" rx="3" fill="#1d1618" />
-      <rect x="185" y="132" width="108" height="42" rx="3" fill="#1a1415" />
-      <rect x="295" y="132" width="108" height="42" rx="3" fill="#1b1517" />
-    </pattern>
-    <filter id="stone" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="1.2" result="soft" />
-      <feTurbulence type="fractalNoise" baseFrequency="0.6" numOctaves="2" seed="7" result="grit" />
-      <feColorMatrix
-        in="grit"
-        type="matrix"
-        values="0 0 0 0 0.5  0 0 0 0 0.45  0 0 0 0 0.47  0 0 0 0.09 0"
-        result="gritA"
-      />
-      <feComposite in="gritA" in2="soft" operator="in" result="gritIn" />
-      <feTurbulence type="fractalNoise" baseFrequency="0.004" numOctaves="3" seed="2" result="blot" />
-      <feColorMatrix
-        in="blot"
-        type="matrix"
-        values="0 0 0 0 0.03  0 0 0 0 0.015  0 0 0 0 0.025  -1.3 0 0 0 0.85"
-        result="blotA"
-      />
-      <feMerge>
-        <feMergeNode in="soft" />
-        <feMergeNode in="gritIn" />
-        <feMergeNode in="blotA" />
-      </feMerge>
-    </filter>
-    <!-- wood grain running along (H) or across (V) a board -->
-    <filter id="grainH" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency="0.006 0.42" numOctaves="3" seed="4" result="n" />
-      <feColorMatrix
-        in="n"
-        type="matrix"
-        values="0 0 0 0 0.02  0 0 0 0 0.01  0 0 0 0 0  -2 0 0 0 1.12"
-        result="dark"
-      />
-      <feComposite in="dark" in2="SourceGraphic" operator="in" result="darkIn" />
-      <feColorMatrix
-        in="n"
-        type="matrix"
-        values="0 0 0 0 0.78  0 0 0 0 0.55  0 0 0 0 0.38  1.4 0 0 0 -0.78"
-        result="light"
-      />
-      <feComposite in="light" in2="SourceGraphic" operator="in" result="lightIn" />
-      <feMerge>
-        <feMergeNode in="SourceGraphic" />
-        <feMergeNode in="lightIn" />
-        <feMergeNode in="darkIn" />
-      </feMerge>
-    </filter>
-    <filter id="grainV" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency="0.42 0.006" numOctaves="3" seed="9" result="n" />
-      <feColorMatrix
-        in="n"
-        type="matrix"
-        values="0 0 0 0 0.02  0 0 0 0 0.01  0 0 0 0 0  -2 0 0 0 1.12"
-        result="dark"
-      />
-      <feComposite in="dark" in2="SourceGraphic" operator="in" result="darkIn" />
-      <feColorMatrix
-        in="n"
-        type="matrix"
-        values="0 0 0 0 0.78  0 0 0 0 0.55  0 0 0 0 0.38  1.4 0 0 0 -0.8"
-        result="light"
-      />
-      <feComposite in="light" in2="SourceGraphic" operator="in" result="lightIn" />
-      <feMerge>
-        <feMergeNode in="SourceGraphic" />
-        <feMergeNode in="lightIn" />
-        <feMergeNode in="darkIn" />
-      </feMerge>
-    </filter>
-  </defs>
-  <rect width="100%" height="100%" fill="url(#blocks)" filter="url(#stone)" />
-</svg>
+<div class="wall" aria-hidden="true"></div>
 <div class="haze" aria-hidden="true"></div>
 
 {#each motes as mote, i (i)}
@@ -126,9 +36,9 @@
     pointer-events: none;
   }
 
+  /* a tile drawn once, not a filter run over the whole page on every change to its height */
   .wall {
-    width: 100%;
-    height: 100%;
+    background: url('../../assets/stone.svg') 0 0 / 990px 704px;
   }
 
   .haze {

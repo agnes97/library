@@ -50,7 +50,7 @@
   onclick={(event) => onSelect(event.currentTarget)}
 >
   {#if photo}
-    <img src={photo} alt="" draggable="false" onerror={() => (brokenPhoto = photo)} />
+    <img src={photo} alt="" draggable="false" decoding="async" onerror={() => (brokenPhoto = photo)} />
   {:else}
     <span class="band"></span>
     <span class="title">{book.title}</span>

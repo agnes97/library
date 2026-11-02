@@ -664,9 +664,8 @@
     height: 14px;
     margin: 0 -28px;
     border-radius: 2px 2px 0 0;
-    background: linear-gradient(180deg, #7a5238 0, #54382a 2px, #3e281b 55%, #26180f);
+    background: var(--grain-h), linear-gradient(180deg, #7a5238 0, #54382a 2px, #3e281b 55%, #26180f);
     box-shadow: 0 8px 12px -2px rgb(0 0 0 / 0.85);
-    filter: url(#grainH);
   }
 
   .cove {
@@ -674,17 +673,16 @@
     z-index: 2;
     height: 11px;
     margin: 0 -18px;
-    background: linear-gradient(180deg, #0d0705, #22150e 45%, #4a3122 90%, #2a1a11);
-    filter: url(#grainH);
+    background: var(--grain-h), linear-gradient(180deg, #0d0705, #22150e 45%, #4a3122 90%, #2a1a11);
   }
 
   .dentils {
     height: 10px;
     margin: 0 -10px;
     background:
+      var(--grain-h),
       linear-gradient(180deg, rgb(255 200 160 / 0.08), transparent 30%, rgb(0 0 0 / 0.5)),
       repeating-linear-gradient(90deg, #3e2a1c 0 15px, #5a3d2a 15px 16px, #090504 16px 25px);
-    filter: url(#grainH);
   }
 
   .frieze {
@@ -693,9 +691,8 @@
     gap: 14px;
     height: 38px;
     padding: 0 26px;
-    background: linear-gradient(180deg, #34221a, #24170f);
+    background: var(--grain-h), linear-gradient(180deg, #34221a, #24170f);
     box-shadow: inset 0 6px 8px -4px rgb(0 0 0 / 0.8);
-    filter: url(#grainH);
   }
 
   .panel {
@@ -715,9 +712,8 @@
     height: 9px;
     margin: 0 -6px;
     border-radius: 5px;
-    background: linear-gradient(180deg, #664530, #33211a 50%, #120b07);
+    background: var(--grain-h), linear-gradient(180deg, #664530, #33211a 50%, #120b07);
     box-shadow: 0 5px 9px rgb(0 0 0 / 0.8);
-    filter: url(#grainH);
   }
 
   .body {
@@ -728,9 +724,9 @@
     flex: none;
     width: 36px;
     background:
+      var(--grain-v),
       repeating-linear-gradient(90deg, rgb(0 0 0 / 0.4) 0 1px, transparent 1px 9px),
       linear-gradient(90deg, #120b07, #3e2a1c 28%, #2c1c13 62%, #0e0805);
-    filter: url(#grainV);
   }
 
   .viewport {
@@ -764,6 +760,7 @@
     left: calc(-1 * var(--side));
     right: calc(-1 * var(--side));
     background:
+      var(--grain-v),
       repeating-linear-gradient(
         90deg,
         rgb(0 0 0 / 0.65) 0 2px,
@@ -772,7 +769,6 @@
       ),
       linear-gradient(180deg, #1e140e, #140c08);
     box-shadow: inset 0 34px 40px -12px rgb(0 0 0 / 0.9);
-    filter: url(#grainV);
   }
 
   .row {
@@ -861,31 +857,21 @@
     position: relative;
     height: 26px;
     margin: 0 calc(-1 * var(--side));
+    background: var(--grain-h), linear-gradient(180deg, #6a4831 0, #4a3122 6px, #2e1d14 7px, #24170f 60%, #120b07);
     box-shadow: 0 18px 24px rgb(0 0 0 / 0.8);
-  }
-
-  /* the grain sits on its own layer: a filter on .plank would paint grain into the shadow too */
-  .plank::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, #6a4831 0, #4a3122 6px, #2e1d14 7px, #24170f 60%, #120b07);
-    filter: url(#grainH);
   }
 
   .plinth {
     height: 20px;
     margin: 0 -10px;
-    background: linear-gradient(180deg, #5a3d2a, #2a1b12 30%, #170e09);
-    filter: url(#grainH);
+    background: var(--grain-h), linear-gradient(180deg, #5a3d2a, #2a1b12 30%, #170e09);
   }
 
   .plinth-base {
     height: 34px;
     margin: 0 -18px;
-    background: linear-gradient(180deg, #2b1c13, #120b07);
+    background: var(--grain-h), linear-gradient(180deg, #2b1c13, #120b07);
     box-shadow: 0 20px 30px rgb(0 0 0 / 0.9);
-    filter: url(#grainH);
   }
 
   .shade {

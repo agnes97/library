@@ -16,6 +16,13 @@
   --light-a-glow: color-mix(in srgb, var(--light-a-2) 30%, transparent);
   --light-b-glow: color-mix(in srgb, var(--light-b-2) 30%, transparent);
 
+  /*
+   * wood grain running along (h) or across (v) a board, a background layer laid over its colour;
+   * images rather than live SVG filters, so they are drawn once and not on every scroll
+   */
+  --grain-h: url('./assets/grain-h.svg') 0 0 / 1200px 300px;
+  --grain-v: url('./assets/grain-v.svg') 0 0 / 300px 1200px;
+
   color-scheme: dark;
   font-family: 'IM Fell English', Georgia, serif;
   line-height: 1.5;
