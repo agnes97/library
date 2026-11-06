@@ -94,6 +94,7 @@
 
   /** a load lost to a dropped connection is tried again once the reader is back */
   function retry() {
+    if (document.visibilityState === 'visible') auth.recheck();
     if (auth.isAuthenticated && document.visibilityState === 'visible') library.retry();
   }
 
